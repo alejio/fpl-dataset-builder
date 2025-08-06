@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 class PlayersSchema(pa.DataFrameModel):
     """Schema for fpl_players_current.csv output."""
+
     player_id: Series[int] = pa.Field(unique=True, ge=1)
     web_name: Series[str] = pa.Field(str_length={"min_value": 1})
     first: Series[str] = pa.Field(str_length={"min_value": 1})
@@ -15,6 +16,7 @@ class PlayersSchema(pa.DataFrameModel):
     team_id: Series[int] = pa.Field(ge=1, le=20)  # 20 Premier League teams
     position: Series[str] = pa.Field(isin=["GKP", "DEF", "MID", "FWD"])
     price_gbp: Series[float] = pa.Field(ge=3.5, le=15.0)  # FPL price range
+    selected_by_percentage: Series[float] = pa.Field(ge=0.0, le=100.0)
     as_of_utc: Series[pd.Timestamp]
 
     class Config:
@@ -23,6 +25,7 @@ class PlayersSchema(pa.DataFrameModel):
 
 class TeamsSchema(pa.DataFrameModel):
     """Schema for fpl_teams_current.csv output."""
+
     team_id: Series[int] = pa.Field(unique=True, ge=1, le=20)
     name: Series[str] = pa.Field(str_length={"min_value": 1}, unique=True)
     short_name: Series[str] = pa.Field(str_length={"min_value": 3, "max_value": 3}, unique=True)
@@ -34,6 +37,7 @@ class TeamsSchema(pa.DataFrameModel):
 
 class FixturesSchema(pa.DataFrameModel):
     """Schema for fpl_fixtures_normalized.csv output."""
+
     fixture_id: Series[int] = pa.Field(unique=True, ge=1)
     event: Series[pd.Int64Dtype] = pa.Field(ge=1, le=38, nullable=True)  # 38 gameweeks max
     kickoff_utc: Series[pd.Timestamp]
@@ -52,6 +56,7 @@ class FixturesSchema(pa.DataFrameModel):
 
 class ResultsSchema(pa.DataFrameModel):
     """Schema for match_results_previous_season.csv output."""
+
     date_utc: Series[pd.Timestamp]
     home_team: Series[str] = pa.Field(str_length={"min_value": 1})
     away_team: Series[str] = pa.Field(str_length={"min_value": 1})
@@ -70,6 +75,7 @@ class ResultsSchema(pa.DataFrameModel):
 
 class PlayerRatesSchema(pa.DataFrameModel):
     """Schema for fpl_player_xg_xa_rates.csv output."""
+
     player: Series[str] = pa.Field(str_length={"min_value": 1})
     team: Series[str] = pa.Field(str_length={"min_value": 1})
     season: Series[str] = pa.Field(str_matches=r"^\d{4}-\d{4}$")
@@ -84,6 +90,7 @@ class PlayerRatesSchema(pa.DataFrameModel):
 
 class HistoricalGWSchema(pa.DataFrameModel):
     """Schema for fpl_historical_gameweek_data.csv output (flexible as external data)."""
+
     name: Series[str] = pa.Field(str_length={"min_value": 1})
 
     class Config:
@@ -93,6 +100,7 @@ class HistoricalGWSchema(pa.DataFrameModel):
 
 class InjuriesSchema(pa.DataFrameModel):
     """Schema for injury_tracking_template.csv template."""
+
     player: Series[str] = pa.Field(str_length={"min_value": 1})
     status: Series[str] = pa.Field(isin=["available", "injured", "suspended", "doubtful"])
     return_estimate: Series[str] = pa.Field(nullable=True)
@@ -105,6 +113,7 @@ class InjuriesSchema(pa.DataFrameModel):
 # Validation wrapper for Pydantic integration
 class ValidatedDatasets(BaseModel):
     """Container for validated DataFrames using Pydantic v2."""
+
     players: DataFrame[PlayersSchema]
     teams: DataFrame[TeamsSchema]
     fixtures: DataFrame[FixturesSchema]

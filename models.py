@@ -7,6 +7,7 @@ from pydantic import AwareDatetime, BaseModel, Field
 # Type definitions
 Position = Literal["GKP", "DEF", "MID", "FWD"]
 
+
 class Player(BaseModel):
     player_id: int
     web_name: str
@@ -15,13 +16,16 @@ class Player(BaseModel):
     team_id: int
     position: Position
     price_gbp: float = Field(ge=0)
+    selected_by_percentage: float = Field(ge=0, le=100)
     as_of_utc: AwareDatetime
+
 
 class Team(BaseModel):
     team_id: int
     name: str
     short_name: str
     as_of_utc: AwareDatetime
+
 
 class Fixture(BaseModel):
     fixture_id: int
@@ -31,6 +35,7 @@ class Fixture(BaseModel):
     away_team_id: int
     as_of_utc: AwareDatetime
 
+
 class MatchResult(BaseModel):
     date_utc: AwareDatetime
     home_team: str
@@ -38,6 +43,7 @@ class MatchResult(BaseModel):
     home_goals: int = Field(ge=0)
     away_goals: int = Field(ge=0)
     season: str
+
 
 class PlayerRates(BaseModel):
     player: str

@@ -23,7 +23,8 @@ def normalize_players(bootstrap: dict) -> list[Player]:
             team_id=player_data["team"],
             position=position_map[player_data["element_type"]],
             price_gbp=player_data["now_cost"] / 10.0,
-            as_of_utc=current_time
+            selected_by_percentage=float(player_data["selected_by_percent"]),
+            as_of_utc=current_time,
         )
         players.append(player)
 
@@ -37,10 +38,7 @@ def normalize_teams(bootstrap: dict) -> list[Team]:
 
     for team_data in bootstrap["teams"]:
         team = Team(
-            team_id=team_data["id"],
-            name=team_data["name"],
-            short_name=team_data["short_name"],
-            as_of_utc=current_time
+            team_id=team_data["id"], name=team_data["name"], short_name=team_data["short_name"], as_of_utc=current_time
         )
         teams.append(team)
 
@@ -66,7 +64,7 @@ def normalize_fixtures(fixtures_data: list[dict]) -> list[Fixture]:
             kickoff_utc=kickoff_utc,
             home_team_id=fixture_data["team_h"],
             away_team_id=fixture_data["team_a"],
-            as_of_utc=current_time
+            as_of_utc=current_time,
         )
         fixtures.append(fixture)
 

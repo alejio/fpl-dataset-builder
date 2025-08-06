@@ -69,3 +69,6 @@ htmlcov/
 *.tmp
 *.temp
 
+/__pycache__/*
+fetchers/__pycache__/*
+validation/__pycache__/*
