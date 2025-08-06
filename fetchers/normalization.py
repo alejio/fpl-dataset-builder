@@ -24,6 +24,7 @@ def normalize_players(bootstrap: dict) -> list[Player]:
             position=position_map[player_data["element_type"]],
             price_gbp=player_data["now_cost"] / 10.0,
             selected_by_percentage=float(player_data["selected_by_percent"]),
+            availability_status=player_data["status"],
             as_of_utc=current_time,
         )
         players.append(player)

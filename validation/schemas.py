@@ -17,6 +17,9 @@ class PlayersSchema(pa.DataFrameModel):
     position: Series[str] = pa.Field(isin=["GKP", "DEF", "MID", "FWD"])
     price_gbp: Series[float] = pa.Field(ge=3.5, le=15.0)  # FPL price range
     selected_by_percentage: Series[float] = pa.Field(ge=0.0, le=100.0)
+    availability_status: Series[str] = pa.Field(
+        isin=["a", "i", "s", "u", "d"]
+    )  # available, injured, suspended, unavailable, doubtful
     as_of_utc: Series[pd.Timestamp]
 
     class Config:
