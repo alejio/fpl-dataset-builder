@@ -20,6 +20,7 @@ from fetchers import (
     simple_name_match,
 )
 from safety import create_safety_backup, safe_csv_write, validate_data_integrity
+from safety.change_detector import change_detector
 from safety.cli import create_safety_cli
 from utils import ensure_data_dir
 from validation import (
@@ -100,6 +101,13 @@ def main(
     safe_csv_write(players_df, "fpl_players_current.csv", "main_run")
     safe_csv_write(teams_df, "fpl_teams_current.csv", "main_run")
     safe_csv_write(fixtures_df, "fpl_fixtures_normalized.csv", "main_run")
+
+    # Report changes
+    typer.echo("📊 CHANGES DETECTED:")
+    for df, filename in [(players_df, "fpl_players_current.csv"), (fixtures_df, "fpl_fixtures_normalized.csv")]:
+        change_report = change_detector.detect_and_report_changes(filename, df)
+        for line in change_report:
+            typer.echo(line)
 
     # 4. Fetch and validate external data (optional)
     if update_historical:
