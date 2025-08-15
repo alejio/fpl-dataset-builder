@@ -17,7 +17,7 @@ class Player(BaseModel):
     position: Position
     price_gbp: float = Field(ge=0)
     selected_by_percentage: float = Field(ge=0, le=100)
-    availability_status: str = Field(pattern=r"^[aisud]$")
+    availability_status: str = Field(pattern=r"^[aisudn]$")
     as_of_utc: AwareDatetime
 
 
