@@ -1,6 +1,7 @@
 # Data files
 data/
 !data/.gitkeep
+!data/DATASET.md
 
 # Python
 __pycache__/
@@ -62,13 +63,12 @@ htmlcov/
 .tox/
 .nox/
 
+# Linting
+.ruff_cache/
+
 # uv
 .uv/
 
 # Temporary files
 *.tmp
 *.temp
-
-/__pycache__/*
-fetchers/__pycache__/*
-validation/__pycache__/*

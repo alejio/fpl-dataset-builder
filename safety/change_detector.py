@@ -14,6 +14,7 @@ class ChangeDetector:
     def __init__(self, data_dir: str = "data", backup_dir: str = "data/backups"):
         self.data_dir = Path(data_dir)
         self.backup_dir = Path(backup_dir)
+        self._players_cache = None
 
     def find_latest_backup(self, filename: str, backup_suffix: str = "pre_main_run") -> Path | None:
         """Find the most recent backup for a given file."""
@@ -25,6 +26,17 @@ class ChangeDetector:
             return None
 
         return max(backups, key=lambda x: x.stat().st_mtime)
+
+    def _get_player_name(self, player_id: int) -> str:
+        """Get player name from player ID, with caching."""
+        if self._players_cache is None:
+            try:
+                players_df = pd.read_csv(self.data_dir / "fpl_players_current.csv")
+                self._players_cache = dict(zip(players_df["player_id"], players_df["web_name"], strict=False))
+            except Exception:
+                self._players_cache = {}
+
+        return self._players_cache.get(player_id, f"Player {player_id}")
 
     def detect_player_changes(self, current_df: pd.DataFrame, previous_backup: Path) -> dict[str, list[dict]]:
         """Detect player additions, removals, and key changes."""
@@ -103,6 +115,91 @@ class ChangeDetector:
 
         return changes
 
+    def detect_live_data_changes(self, current_df: pd.DataFrame, previous_backup: Path) -> dict[str, list[dict]]:
+        """Detect significant live data changes."""
+        if not previous_backup or not previous_backup.exists():
+            return {"top_performers": [], "big_movers": [], "new_entries": []}
+
+        try:
+            previous_df = pd.read_csv(previous_backup)
+        except Exception as e:
+            logger.error(f"Could not read previous backup {previous_backup}: {e}")
+            return {"top_performers": [], "big_movers": [], "new_entries": []}
+
+        changes = {"top_performers": [], "big_movers": [], "new_entries": []}
+
+        # Find top performers (highest points this gameweek)
+        top_scorers = current_df.nlargest(5, "total_points")
+        for _, player in top_scorers.iterrows():
+            if player["total_points"] > 5:  # Only include meaningful scores
+                changes["top_performers"].append(
+                    {
+                        "player_id": player["player_id"],
+                        "points": player["total_points"],
+                        "goals": player["goals_scored"],
+                        "assists": player["assists"],
+                    }
+                )
+
+        # Find players with big point swings (compared to previous gameweek)
+        if not previous_df.empty:
+            merged = current_df.set_index("player_id").join(
+                previous_df.set_index("player_id")[["total_points"]], rsuffix="_prev", how="inner"
+            )
+            merged["points_delta"] = merged["total_points"] - merged["total_points_prev"]
+
+            big_movers = merged[abs(merged["points_delta"]) >= 8].nlargest(5, "points_delta")
+            for player_id, player in big_movers.iterrows():
+                changes["big_movers"].append(
+                    {
+                        "player_id": player_id,
+                        "points_change": player["points_delta"],
+                        "current_points": player["total_points"],
+                        "previous_points": player["total_points_prev"],
+                    }
+                )
+
+        return changes
+
+    def detect_delta_changes(self, current_df: pd.DataFrame) -> dict[str, list[dict]]:
+        """Detect significant delta patterns."""
+        changes = {"price_risers": [], "price_fallers": [], "selection_surges": []}
+
+        # Price changes
+        if "price_delta" in current_df.columns:
+            price_risers = current_df[current_df["price_delta"] > 0].nlargest(3, "price_delta")
+            for _, player in price_risers.iterrows():
+                changes["price_risers"].append(
+                    {
+                        "player_id": player["player_id"],
+                        "price_change": player["price_delta"],
+                    }
+                )
+
+            price_fallers = current_df[current_df["price_delta"] < 0].nsmallest(3, "price_delta")
+            for _, player in price_fallers.iterrows():
+                changes["price_fallers"].append(
+                    {
+                        "player_id": player["player_id"],
+                        "price_change": player["price_delta"],
+                    }
+                )
+
+        # Selection percentage changes
+        if "selected_by_percentage_delta" in current_df.columns:
+            selection_surges = current_df[current_df["selected_by_percentage_delta"] > 2].nlargest(
+                3, "selected_by_percentage_delta"
+            )
+            for _, player in selection_surges.iterrows():
+                changes["selection_surges"].append(
+                    {
+                        "player_id": player["player_id"],
+                        "selection_change": player["selected_by_percentage_delta"],
+                    }
+                )
+
+        return changes
+
     def detect_fixture_changes(self, current_df: pd.DataFrame, previous_backup: Path) -> dict[str, int]:
         """Detect fixture changes."""
         if not previous_backup or not previous_backup.exists():
@@ -136,7 +233,7 @@ class ChangeDetector:
 
         return {"new_fixtures": new_fixtures, "updated_fixtures": updated_fixtures}
 
-    def generate_change_report(self, changes: dict, filename: str) -> list[str]:
+    def generate_change_report(self, changes: dict, filename: str, current_df: pd.DataFrame = None) -> list[str]:
         """Generate human-readable change report."""
         report = []
 
@@ -179,6 +276,48 @@ class ChangeDetector:
             if fixture_changes["updated_fixtures"] > 0:
                 report.append(f"  🔄 {fixture_changes['updated_fixtures']} fixtures updated")
 
+        elif filename.startswith("fpl_live_gameweek_"):
+            live_changes = changes
+            if live_changes["top_performers"]:
+                report.append("  🌟 Top performers this gameweek:")
+                for player in live_changes["top_performers"][:3]:
+                    # Try to get player name
+                    player_name = self._get_player_name(player["player_id"])
+                    report.append(
+                        f"    {player_name}: {player['points']} pts ({player['goals']}G, {player['assists']}A)"
+                    )
+
+            if live_changes["big_movers"]:
+                report.append("  📈 Biggest point swings:")
+                for player in live_changes["big_movers"][:3]:
+                    direction = "↗️" if player["points_change"] > 0 else "↘️"
+                    player_name = self._get_player_name(player["player_id"])
+                    report.append(f"    {player_name}: {player['points_change']:+d} pts {direction}")
+
+        elif filename == "fpl_player_deltas_current.csv":
+            delta_changes = changes
+            if delta_changes["price_risers"]:
+                report.append("  💹 Price risers:")
+                for player in delta_changes["price_risers"]:
+                    player_name = self._get_player_name(player["player_id"])
+                    report.append(f"    {player_name}: +£{player['price_change']:.1f}")
+
+            if delta_changes["price_fallers"]:
+                report.append("  📉 Price fallers:")
+                for player in delta_changes["price_fallers"]:
+                    player_name = self._get_player_name(player["player_id"])
+                    report.append(f"    {player_name}: £{player['price_change']:.1f}")
+
+            if delta_changes["selection_surges"]:
+                report.append("  🔥 Selection surges:")
+                for player in delta_changes["selection_surges"]:
+                    player_name = self._get_player_name(player["player_id"])
+                    report.append(f"    {player_name}: +{player['selection_change']:.1f}%")
+
+        elif filename == "fpl_league_standings_current.csv":
+            # Simple count for league standings
+            report.append(f"  🏆 {len(current_df)} league standings updated")
+
         return report
 
     def detect_and_report_changes(self, filename: str, current_df: pd.DataFrame) -> list[str]:
@@ -192,7 +331,7 @@ class ChangeDetector:
 
         if filename == "fpl_players_current.csv":
             changes = self.detect_player_changes(current_df, previous_backup)
-            change_report = self.generate_change_report(changes, filename)
+            change_report = self.generate_change_report(changes, filename, current_df)
 
             if not any(changes.values()) or all(len(v) == 0 for v in changes.values()):
                 report.append("  ✅ No significant changes detected")
@@ -201,12 +340,35 @@ class ChangeDetector:
 
         elif filename == "fpl_fixtures_normalized.csv":
             changes = self.detect_fixture_changes(current_df, previous_backup)
-            change_report = self.generate_change_report(changes, filename)
+            change_report = self.generate_change_report(changes, filename, current_df)
 
             if changes["new_fixtures"] == 0 and changes["updated_fixtures"] == 0:
                 report.append("  ✅ No fixture changes detected")
             else:
                 report.extend(change_report)
+
+        elif filename.startswith("fpl_live_gameweek_"):
+            changes = self.detect_live_data_changes(current_df, previous_backup)
+            change_report = self.generate_change_report(changes, filename, current_df)
+
+            if not any(changes.values()) or all(len(v) == 0 for v in changes.values()):
+                report.append("  ✅ No significant live data changes")
+            else:
+                report.extend(change_report)
+
+        elif filename == "fpl_player_deltas_current.csv":
+            changes = self.detect_delta_changes(current_df)
+            change_report = self.generate_change_report(changes, filename, current_df)
+
+            if not any(changes.values()) or all(len(v) == 0 for v in changes.values()):
+                report.append("  ✅ No significant delta changes detected")
+            else:
+                report.extend(change_report)
+
+        elif filename in ["fpl_league_standings_current.csv", "fpl_manager_summary.csv"]:
+            change_report = self.generate_change_report({}, filename, current_df)
+            report.extend(change_report)
+
         else:
             # Generic row count comparison
             try:

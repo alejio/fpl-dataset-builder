@@ -2,8 +2,12 @@
 
 from .schemas import (
     FixturesSchema,
+    GameweekLiveDataSchema,
     HistoricalGWSchema,
     InjuriesSchema,
+    LeagueStandingsSchema,
+    ManagerSummarySchema,
+    PlayerDeltaSchema,
     PlayerRatesSchema,
     PlayersSchema,
     ResultsSchema,
@@ -20,6 +24,10 @@ __all__ = [
     "PlayerRatesSchema",
     "HistoricalGWSchema",
     "InjuriesSchema",
+    "GameweekLiveDataSchema",
+    "PlayerDeltaSchema",
+    "LeagueStandingsSchema",
+    "ManagerSummarySchema",
     "ValidatedDatasets",
     "validate_dataframe",
 ]
