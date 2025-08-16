@@ -113,6 +113,97 @@ class InjuriesSchema(pa.DataFrameModel):
         coerce = True
 
 
+class GameweekLiveDataSchema(pa.DataFrameModel):
+    """Schema for fpl_live_gameweek_{event_id}.csv output."""
+
+    player_id: Series[int] = pa.Field(unique=True, ge=1)
+    event: Series[int] = pa.Field(ge=1, le=38)
+    minutes: Series[int] = pa.Field(ge=0, le=120)  # Max 120 minutes per game
+    goals_scored: Series[int] = pa.Field(ge=0, le=10)  # Reasonable upper bound
+    assists: Series[int] = pa.Field(ge=0, le=10)
+    clean_sheets: Series[int] = pa.Field(ge=0, le=1)  # 0 or 1 per gameweek
+    goals_conceded: Series[int] = pa.Field(ge=0, le=20)
+    own_goals: Series[int] = pa.Field(ge=0, le=5)
+    penalties_saved: Series[int] = pa.Field(ge=0, le=5)
+    penalties_missed: Series[int] = pa.Field(ge=0, le=5)
+    yellow_cards: Series[int] = pa.Field(ge=0, le=5)
+    red_cards: Series[int] = pa.Field(ge=0, le=1)
+    saves: Series[int] = pa.Field(ge=0, le=20)
+    bonus: Series[int] = pa.Field(ge=0, le=3)
+    bps: Series[int] = pa.Field(ge=-10, le=100)  # BPS can be negative
+    influence: Series[float] = pa.Field(ge=0)
+    creativity: Series[float] = pa.Field(ge=0)
+    threat: Series[float] = pa.Field(ge=0)
+    ict_index: Series[float] = pa.Field(ge=0)
+    starts: Series[int] = pa.Field(ge=0, le=1)
+    expected_goals: Series[float] = pa.Field(ge=0, le=5.0)
+    expected_assists: Series[float] = pa.Field(ge=0, le=5.0)
+    expected_goal_involvements: Series[float] = pa.Field(ge=0, le=10.0)
+    expected_goals_conceded: Series[float] = pa.Field(ge=0, le=10.0)
+    total_points: Series[int] = pa.Field(ge=-5, le=30)  # Reasonable FPL points range
+    in_dreamteam: Series[bool]
+    as_of_utc: Series[pd.Timestamp]
+
+    class Config:
+        coerce = True
+
+
+class PlayerDeltaSchema(pa.DataFrameModel):
+    """Schema for fpl_player_deltas_current.csv output."""
+
+    player_id: Series[int] = pa.Field(unique=True, ge=1)
+    current_event: Series[int] = pa.Field(ge=1, le=38)
+    previous_event: Series[pd.Int64Dtype] = pa.Field(ge=1, le=38, nullable=True)
+    total_points_delta: Series[int] = pa.Field(ge=-30, le=30)  # Reasonable delta range
+    goals_scored_delta: Series[int] = pa.Field(ge=-10, le=10)
+    assists_delta: Series[int] = pa.Field(ge=-10, le=10)
+    minutes_delta: Series[int] = pa.Field(ge=-120, le=120)
+    saves_delta: Series[int] = pa.Field(ge=-20, le=20)
+    clean_sheets_delta: Series[int] = pa.Field(ge=-1, le=1)
+    price_delta: Series[float] = pa.Field(ge=-2.0, le=2.0)  # Reasonable price change range
+    selected_by_percentage_delta: Series[float] = pa.Field(ge=-50.0, le=50.0)
+    as_of_utc: Series[pd.Timestamp]
+
+    class Config:
+        coerce = True
+
+
+class LeagueStandingsSchema(pa.DataFrameModel):
+    """Schema for fpl_league_standings_current.csv output."""
+
+    manager_id: Series[int] = pa.Field(ge=1)
+    league_id: Series[int] = pa.Field(ge=1)
+    league_name: Series[str] = pa.Field(str_length={"min_value": 1})
+    entry_name: Series[str] = pa.Field(str_length={"min_value": 1})
+    player_name: Series[str] = pa.Field(str_length={"min_value": 1})
+    rank: Series[int] = pa.Field(ge=1)
+    last_rank: Series[pd.Int64Dtype] = pa.Field(ge=1, nullable=True)
+    rank_sort: Series[int] = pa.Field(ge=1)
+    total: Series[int] = pa.Field(ge=0)
+    entry: Series[int] = pa.Field(ge=1)
+    as_of_utc: Series[pd.Timestamp]
+
+    class Config:
+        coerce = True
+
+
+class ManagerSummarySchema(pa.DataFrameModel):
+    """Schema for fpl_manager_summary.csv output."""
+
+    manager_id: Series[int] = pa.Field(unique=True, ge=1)
+    current_event: Series[int] = pa.Field(ge=1, le=38)
+    total_score: Series[int] = pa.Field(ge=0)
+    event_score: Series[int] = pa.Field(ge=-20, le=200)  # Reasonable gameweek score range
+    overall_rank: Series[int] = pa.Field(ge=1)
+    bank: Series[int] = pa.Field(ge=0, le=150)  # Max 15.0 in bank (stored as 150)
+    team_value: Series[int] = pa.Field(ge=1000, le=1200)  # Team value range (stored as 1000 = £100.0)
+    transfers_cost: Series[int] = pa.Field(ge=0)
+    as_of_utc: Series[pd.Timestamp]
+
+    class Config:
+        coerce = True
+
+
 # Validation wrapper for Pydantic integration
 class ValidatedDatasets(BaseModel):
     """Container for validated DataFrames using Pydantic v2."""

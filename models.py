@@ -54,3 +54,74 @@ class PlayerRates(BaseModel):
     xA90: float = Field(ge=0)
     minutes: int = Field(ge=0)
     player_id: int | None = None
+
+
+class GameweekLiveData(BaseModel):
+    player_id: int
+    event: int
+    minutes: int = Field(ge=0)
+    goals_scored: int = Field(ge=0)
+    assists: int = Field(ge=0)
+    clean_sheets: int = Field(ge=0)
+    goals_conceded: int = Field(ge=0)
+    own_goals: int = Field(ge=0)
+    penalties_saved: int = Field(ge=0)
+    penalties_missed: int = Field(ge=0)
+    yellow_cards: int = Field(ge=0)
+    red_cards: int = Field(ge=0)
+    saves: int = Field(ge=0)
+    bonus: int = Field(ge=0)
+    bps: int = Field(ge=-10)  # BPS can be negative
+    influence: float = Field(ge=0)
+    creativity: float = Field(ge=0)
+    threat: float = Field(ge=0)
+    ict_index: float = Field(ge=0)
+    starts: int = Field(ge=0)
+    expected_goals: float = Field(ge=0)
+    expected_assists: float = Field(ge=0)
+    expected_goal_involvements: float = Field(ge=0)
+    expected_goals_conceded: float = Field(ge=0)
+    total_points: int
+    in_dreamteam: bool
+    as_of_utc: AwareDatetime
+
+
+class PlayerDelta(BaseModel):
+    player_id: int
+    current_event: int
+    previous_event: int | None = None
+    total_points_delta: int = 0
+    goals_scored_delta: int = 0
+    assists_delta: int = 0
+    minutes_delta: int = 0
+    saves_delta: int = 0
+    clean_sheets_delta: int = 0
+    price_delta: float = 0.0
+    selected_by_percentage_delta: float = 0.0
+    as_of_utc: AwareDatetime
+
+
+class LeagueStandings(BaseModel):
+    manager_id: int
+    league_id: int
+    league_name: str
+    entry_name: str
+    player_name: str
+    rank: int
+    last_rank: int | None = None
+    rank_sort: int
+    total: int
+    entry: int
+    as_of_utc: AwareDatetime
+
+
+class ManagerSummary(BaseModel):
+    manager_id: int
+    current_event: int
+    total_score: int
+    event_score: int
+    overall_rank: int
+    bank: int
+    team_value: int
+    transfers_cost: int
+    as_of_utc: AwareDatetime
