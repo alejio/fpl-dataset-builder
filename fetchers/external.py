@@ -26,37 +26,39 @@ def fetch_results_last_season(season: str) -> pd.DataFrame:
         data = http_get(url)
 
         # Read CSV data
-        fixtures_df = pd.read_csv(StringIO(data.decode('utf-8')))
+        fixtures_df = pd.read_csv(StringIO(data.decode("utf-8")))
 
         # Filter for completed matches (both scores not null)
-        completed_matches = fixtures_df.dropna(subset=['team_h_score', 'team_a_score'])
+        completed_matches = fixtures_df.dropna(subset=["team_h_score", "team_a_score"])
 
         # Create team ID to name mapping from our teams data
         teams_df = pd.read_csv("data/fpl_teams_current.csv")
-        team_id_to_name = dict(zip(teams_df['team_id'], teams_df['name'], strict=False))
+        team_id_to_name = dict(zip(teams_df["team_id"], teams_df["name"], strict=False))
 
         # Normalize to our schema
         results = []
         for _, match in completed_matches.iterrows():
             # Map team IDs to names
-            home_team = team_id_to_name.get(match['team_h'], f"Team_{match['team_h']}")
-            away_team = team_id_to_name.get(match['team_a'], f"Team_{match['team_a']}")
+            home_team = team_id_to_name.get(match["team_h"], f"Team_{match['team_h']}")
+            away_team = team_id_to_name.get(match["team_a"], f"Team_{match['team_a']}")
 
-            results.append({
-                'date_utc': pd.to_datetime(match['kickoff_time']).tz_convert('UTC'),
-                'home_team': home_team,
-                'away_team': away_team,
-                'home_goals': int(match['team_h_score']),
-                'away_goals': int(match['team_a_score']),
-                'season': season
-            })
+            results.append(
+                {
+                    "date_utc": pd.to_datetime(match["kickoff_time"]).tz_convert("UTC"),
+                    "home_team": home_team,
+                    "away_team": away_team,
+                    "home_goals": int(match["team_h_score"]),
+                    "away_goals": int(match["team_a_score"]),
+                    "season": season,
+                }
+            )
 
         return pd.DataFrame(results)
 
     except Exception as e:
         print(f"Error fetching results from vaastav: {e}")
         # Create empty DataFrame with correct schema
-        return pd.DataFrame(columns=['date_utc', 'home_team', 'away_team', 'home_goals', 'away_goals', 'season'])
+        return pd.DataFrame(columns=["date_utc", "home_team", "away_team", "home_goals", "away_goals", "season"])
 
 
 def fetch_player_rates_last_season(season: str) -> pd.DataFrame:
@@ -64,4 +66,4 @@ def fetch_player_rates_last_season(season: str) -> pd.DataFrame:
     print(f"Creating empty player rates dataset for season {season} (manual population)...")
 
     # Return empty DataFrame with correct schema for manual population
-    return pd.DataFrame(columns=['player', 'team', 'season', 'minutes', 'xG', 'xA', 'xG90', 'xA90', 'player_id'])
+    return pd.DataFrame(columns=["player", "team", "season", "minutes", "xG", "xA", "xG90", "xA90", "player_id"])

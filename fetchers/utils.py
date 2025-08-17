@@ -5,7 +5,9 @@ import pandas as pd
 from models import Player, Team
 
 
-def simple_name_match(player_rates_df: pd.DataFrame, players: list[Player], teams: list[Team]) -> tuple[pd.DataFrame, pd.DataFrame]:
+def simple_name_match(
+    player_rates_df: pd.DataFrame, players: list[Player], teams: list[Team]
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Simple name matching between FBref and FPL data."""
     print("Performing name matching...")
 
@@ -18,8 +20,8 @@ def simple_name_match(player_rates_df: pd.DataFrame, players: list[Player], team
     unmatched_rows = []
 
     for _, row in player_rates_df.iterrows():
-        player_name = row['player'].lower().strip()
-        team_name = row['team'].lower().strip()
+        player_name = row["player"].lower().strip()
+        team_name = row["team"].lower().strip()
 
         # Try to match team first
         team_id = team_name_to_id.get(team_name) or team_short_to_id.get(team_name)
@@ -29,20 +31,16 @@ def simple_name_match(player_rates_df: pd.DataFrame, players: list[Player], team
             player_id = fpl_players.get((player_name, team_id))
             if player_id:
                 row_dict = row.to_dict()
-                row_dict['player_id'] = player_id
+                row_dict["player_id"] = player_id
                 matched_rows.append(row_dict)
                 continue
 
         # If no match found
         row_dict = row.to_dict()
-        row_dict['player_id'] = None
+        row_dict["player_id"] = None
         matched_rows.append(row_dict)
 
-        unmatched_rows.append({
-            'provider_player': row['player'],
-            'provider_team': row['team'],
-            'player_id': None
-        })
+        unmatched_rows.append({"provider_player": row["player"], "provider_team": row["team"], "player_id": None})
 
     matched_df = pd.DataFrame(matched_rows)
     unmatched_df = pd.DataFrame(unmatched_rows)
@@ -59,12 +57,14 @@ def create_injuries_template(players: list[Player]):
 
     injuries_data = []
     for player in top_players:
-        injuries_data.append({
-            'player': f"{player.first} {player.second}",
-            'status': 'available',
-            'return_estimate': None,
-            'suspended': 0
-        })
+        injuries_data.append(
+            {
+                "player": f"{player.first} {player.second}",
+                "status": "available",
+                "return_estimate": None,
+                "suspended": 0,
+            }
+        )
 
     df = pd.DataFrame(injuries_data)
     df.to_csv("data/injury_tracking_template.csv", index=False)

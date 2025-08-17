@@ -160,7 +160,7 @@ class PlayerDeltaSchema(pa.DataFrameModel):
     minutes_delta: Series[int] = pa.Field(ge=-120, le=120)
     saves_delta: Series[int] = pa.Field(ge=-20, le=20)
     clean_sheets_delta: Series[int] = pa.Field(ge=-1, le=1)
-    price_delta: Series[float] = pa.Field(ge=-2.0, le=2.0)  # Reasonable price change range
+    price_delta: Series[float] = pa.Field(ge=-5.0, le=5.0)  # Allow larger price changes at season start
     selected_by_percentage_delta: Series[float] = pa.Field(ge=-50.0, le=50.0)
     as_of_utc: Series[pd.Timestamp]
 

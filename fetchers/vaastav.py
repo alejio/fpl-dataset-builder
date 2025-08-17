@@ -20,4 +20,6 @@ def download_vaastav_merged_gw(season_folder: str):
     except Exception as e:
         print(f"Error downloading vaastav data: {e}")
         # Create empty CSV with some basic columns
-        pd.DataFrame(columns=['name', 'position', 'team', 'GW', 'total_points']).to_csv("data/fpl_historical_gameweek_data.csv", index=False)
+        pd.DataFrame(columns=["name", "position", "team", "GW", "total_points"]).to_csv(
+            "data/fpl_historical_gameweek_data.csv", index=False
+        )

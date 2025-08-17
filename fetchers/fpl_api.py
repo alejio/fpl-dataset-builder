@@ -33,3 +33,58 @@ def fetch_fpl_fixtures() -> list[dict]:
         json.dump(fixtures, f, indent=2)
 
     return fixtures
+
+
+def fetch_team_details_by_id(team_id: int, bootstrap_data: dict | None = None) -> dict | None:
+    """Fetch team details by team ID from bootstrap data or API."""
+    if bootstrap_data is None:
+        bootstrap_data = fetch_fpl_bootstrap()
+
+    teams = bootstrap_data.get("teams", [])
+    for team in teams:
+        if team.get("id") == team_id:
+            return team
+
+    print(f"Team with ID {team_id} not found")
+    return None
+
+
+def fetch_manager_team_with_budget(manager_id: int) -> dict | None:
+    """Fetch manager's team details including transfer budget and team value."""
+    print(f"Fetching team details and budget for manager {manager_id}...")
+
+    try:
+        # Get manager summary data
+        url = f"https://fantasy.premierleague.com/api/entry/{manager_id}/"
+        data = http_get(url)
+        manager_data = json.loads(data)
+
+        # Get current gameweek picks and team details
+        current_event = manager_data.get("current_event", 1)
+        picks_url = f"https://fantasy.premierleague.com/api/entry/{manager_id}/event/{current_event}/picks/"
+        picks_data = http_get(picks_url)
+        picks_info = json.loads(picks_data)
+
+        # Combine manager summary with detailed team info
+        team_details = {
+            "manager_id": manager_id,
+            "entry_name": manager_data.get("name", ""),
+            "player_first_name": manager_data.get("player_first_name", ""),
+            "player_last_name": manager_data.get("player_last_name", ""),
+            "current_event": current_event,
+            "total_points": manager_data.get("summary_overall_points", 0),
+            "overall_rank": manager_data.get("summary_overall_rank", 0),
+            "bank": picks_info.get("entry_history", {}).get("bank", 0),
+            "team_value": picks_info.get("entry_history", {}).get("value", 0),
+            "total_transfers": picks_info.get("entry_history", {}).get("total_transfers", 0),
+            "transfer_cost": picks_info.get("entry_history", {}).get("event_transfers_cost", 0),
+            "points_on_bench": picks_info.get("entry_history", {}).get("points_on_bench", 0),
+            "active_chip": picks_info.get("active_chip"),
+            "picks": picks_info.get("picks", []),
+        }
+
+        return team_details
+
+    except Exception as e:
+        print(f"Error fetching manager team details: {e}")
+        return None

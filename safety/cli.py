@@ -33,9 +33,9 @@ def create_safety_cli() -> typer.Typer:
         summary = data_safety.get_data_summary()
         typer.echo("📊 Dataset Summary:")
         for filename, info in summary.items():
-            if 'error' in info:
+            if "error" in info:
                 typer.echo(f"  ❌ {filename}: {info['error']}")
-            elif 'status' in info:
+            elif "status" in info:
                 typer.echo(f"  ⚠️  {filename}: {info['status']}")
             else:
                 typer.echo(f"  ✅ {filename}: {info['rows']:,} rows, {info['size_mb']} MB")

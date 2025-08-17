@@ -9,7 +9,7 @@ from pathlib import Path
 import pandas as pd
 
 # Set up logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -28,7 +28,7 @@ class DataSafetyManager:
             "fpl_player_xg_xa_rates.csv",
             "vaastav_full_player_history_2024_2025.csv",
             "fpl_fixtures_normalized.csv",
-            "fpl_historical_gameweek_data.csv"
+            "fpl_historical_gameweek_data.csv",
         }
 
     def create_backup(self, filename: str, backup_suffix: str = None) -> Path:
@@ -94,10 +94,9 @@ class DataSafetyManager:
         if filepath.exists():
             backup_path = self.create_backup(filename, backup_suffix or "pre_write")
 
-
         try:
             # Write to temporary file first
-            temp_path = filepath.with_suffix('.tmp')
+            temp_path = filepath.with_suffix(".tmp")
             df.to_csv(temp_path, index=False)
 
             # Validate the temporary file
@@ -140,16 +139,16 @@ class DataSafetyManager:
                 try:
                     df = pd.read_csv(filepath)
                     summary[filename] = {
-                        'rows': len(df),
-                        'columns': len(df.columns),
-                        'size_mb': round(filepath.stat().st_size / (1024*1024), 2),
-                        'last_modified': datetime.fromtimestamp(filepath.stat().st_mtime).isoformat(),
-                        'hash': self.get_file_hash(filepath)
+                        "rows": len(df),
+                        "columns": len(df.columns),
+                        "size_mb": round(filepath.stat().st_size / (1024 * 1024), 2),
+                        "last_modified": datetime.fromtimestamp(filepath.stat().st_mtime).isoformat(),
+                        "hash": self.get_file_hash(filepath),
                     }
                 except Exception as e:
-                    summary[filename] = {'error': str(e)}
+                    summary[filename] = {"error": str(e)}
             else:
-                summary[filename] = {'status': 'missing'}
+                summary[filename] = {"status": "missing"}
 
         return summary
 
