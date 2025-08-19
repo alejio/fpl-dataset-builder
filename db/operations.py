@@ -1,7 +1,8 @@
 """Database operations for CRUD functionality and DataFrame integration."""
 
 import pandas as pd
-from sqlalchemy import select, text
+from sqlalchemy import text
+from sqlalchemy.inspection import inspect
 
 from . import models
 from .database import SessionLocal, get_session
@@ -14,6 +15,24 @@ def convert_datetime_columns(df: pd.DataFrame, datetime_columns: list[str]) -> p
         if col in df_copy.columns:
             df_copy[col] = pd.to_datetime(df_copy[col], errors="coerce")
     return df_copy
+
+
+def model_to_dataframe(model_class, query_result) -> pd.DataFrame:
+    """Convert SQLAlchemy model query result to pandas DataFrame."""
+    if not query_result:
+        return pd.DataFrame()
+
+    # Get column names from the model
+    mapper = inspect(model_class)
+    columns = [column.key for column in mapper.columns]
+
+    # Convert model objects to dictionaries
+    data = []
+    for obj in query_result:
+        row_data = {col: getattr(obj, col) for col in columns}
+        data.append(row_data)
+
+    return pd.DataFrame(data)
 
 
 class DatabaseOperations:
@@ -45,16 +64,8 @@ class DatabaseOperations:
     def get_players_current(self) -> pd.DataFrame:
         """Get current players as DataFrame."""
         with next(get_session()) as session:
-            query = select(models.PlayerCurrent)
-            result = session.execute(query)
-            rows = result.fetchall()
-
-            if not rows:
-                return pd.DataFrame()
-
-            # Convert to DataFrame
-            data = [row._asdict() for row in rows]
-            return pd.DataFrame(data)
+            query_result = session.query(models.PlayerCurrent).all()
+            return model_to_dataframe(models.PlayerCurrent, query_result)
 
     def save_teams_current(self, df: pd.DataFrame) -> None:
         """Save current teams DataFrame to database."""
@@ -74,15 +85,8 @@ class DatabaseOperations:
     def get_teams_current(self) -> pd.DataFrame:
         """Get current teams as DataFrame."""
         with next(get_session()) as session:
-            query = select(models.TeamCurrent)
-            result = session.execute(query)
-            rows = result.fetchall()
-
-            if not rows:
-                return pd.DataFrame()
-
-            data = [row._asdict() for row in rows]
-            return pd.DataFrame(data)
+            query_result = session.query(models.TeamCurrent).all()
+            return model_to_dataframe(models.TeamCurrent, query_result)
 
     def save_fixtures_normalized(self, df: pd.DataFrame) -> None:
         """Save normalized fixtures DataFrame to database."""
@@ -102,15 +106,8 @@ class DatabaseOperations:
     def get_fixtures_normalized(self) -> pd.DataFrame:
         """Get normalized fixtures as DataFrame."""
         with next(get_session()) as session:
-            query = select(models.FixtureNormalized)
-            result = session.execute(query)
-            rows = result.fetchall()
-
-            if not rows:
-                return pd.DataFrame()
-
-            data = [row._asdict() for row in rows]
-            return pd.DataFrame(data)
+            query_result = session.query(models.FixtureNormalized).all()
+            return model_to_dataframe(models.FixtureNormalized, query_result)
 
     def save_player_xg_xa_rates(self, df: pd.DataFrame) -> None:
         """Save player xG/xA rates DataFrame to database."""
@@ -130,15 +127,8 @@ class DatabaseOperations:
     def get_player_xg_xa_rates(self) -> pd.DataFrame:
         """Get player xG/xA rates as DataFrame."""
         with next(get_session()) as session:
-            query = select(models.PlayerXGXARates)
-            result = session.execute(query)
-            rows = result.fetchall()
-
-            if not rows:
-                return pd.DataFrame()
-
-            data = [row._asdict() for row in rows]
-            return pd.DataFrame(data)
+            query_result = session.query(models.PlayerXGXARates).all()
+            return model_to_dataframe(models.PlayerXGXARates, query_result)
 
     def save_gameweek_live_data(self, df: pd.DataFrame, gameweek: int) -> None:
         """Save live gameweek data DataFrame to database."""
@@ -160,18 +150,11 @@ class DatabaseOperations:
     def get_gameweek_live_data(self, gameweek: int | None = None) -> pd.DataFrame:
         """Get live gameweek data as DataFrame."""
         with next(get_session()) as session:
-            query = select(models.GameweekLiveData)
+            query = session.query(models.GameweekLiveData)
             if gameweek is not None:
-                query = query.where(models.GameweekLiveData.event == gameweek)
-
-            result = session.execute(query)
-            rows = result.fetchall()
-
-            if not rows:
-                return pd.DataFrame()
-
-            data = [row._asdict() for row in rows]
-            return pd.DataFrame(data)
+                query = query.filter(models.GameweekLiveData.event == gameweek)
+            query_result = query.all()
+            return model_to_dataframe(models.GameweekLiveData, query_result)
 
     def save_player_deltas_current(self, df: pd.DataFrame) -> None:
         """Save player deltas DataFrame to database."""
@@ -184,15 +167,8 @@ class DatabaseOperations:
     def get_player_deltas_current(self) -> pd.DataFrame:
         """Get player deltas as DataFrame."""
         with next(get_session()) as session:
-            query = select(models.PlayerDeltasCurrent)
-            result = session.execute(query)
-            rows = result.fetchall()
-
-            if not rows:
-                return pd.DataFrame()
-
-            data = [row._asdict() for row in rows]
-            return pd.DataFrame(data)
+            query_result = session.query(models.PlayerDeltasCurrent).all()
+            return model_to_dataframe(models.PlayerDeltasCurrent, query_result)
 
     def save_match_results_previous_season(self, df: pd.DataFrame) -> None:
         """Save match results DataFrame to database."""
@@ -205,15 +181,8 @@ class DatabaseOperations:
     def get_match_results_previous_season(self) -> pd.DataFrame:
         """Get match results as DataFrame."""
         with next(get_session()) as session:
-            query = select(models.MatchResultPreviousSeason)
-            result = session.execute(query)
-            rows = result.fetchall()
-
-            if not rows:
-                return pd.DataFrame()
-
-            data = [row._asdict() for row in rows]
-            return pd.DataFrame(data)
+            query_result = session.query(models.MatchResultPreviousSeason).all()
+            return model_to_dataframe(models.MatchResultPreviousSeason, query_result)
 
     def save_vaastav_full_player_history(self, df: pd.DataFrame) -> None:
         """Save Vaastav player history DataFrame to database."""
@@ -256,15 +225,8 @@ class DatabaseOperations:
     def get_vaastav_full_player_history(self) -> pd.DataFrame:
         """Get Vaastav player history as DataFrame."""
         with next(get_session()) as session:
-            query = select(models.VaastavFullPlayerHistory)
-            result = session.execute(query)
-            rows = result.fetchall()
-
-            if not rows:
-                return pd.DataFrame()
-
-            data = [row._asdict() for row in rows]
-            return pd.DataFrame(data)
+            query_result = session.query(models.VaastavFullPlayerHistory).all()
+            return model_to_dataframe(models.VaastavFullPlayerHistory, query_result)
 
     def execute_raw_sql(self, sql: str) -> pd.DataFrame:
         """Execute raw SQL and return as DataFrame."""
