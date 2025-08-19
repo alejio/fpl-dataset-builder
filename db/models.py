@@ -226,3 +226,52 @@ class ManagerSummary(Base):
     team_value: Mapped[int] = mapped_column(Integer)
     transfers_cost: Mapped[int] = mapped_column(Integer)
     as_of_utc: Mapped[datetime] = mapped_column(DateTime)
+
+
+class FplMyManager(Base):
+    """My manager information - single row table for specific manager data."""
+
+    __tablename__ = "fpl_my_manager"
+
+    manager_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    entry_name: Mapped[str] = mapped_column(String(100))
+    player_first_name: Mapped[str] = mapped_column(String(50))
+    player_last_name: Mapped[str] = mapped_column(String(50))
+    summary_overall_points: Mapped[int] = mapped_column(Integer)
+    summary_overall_rank: Mapped[int] = mapped_column(Integer)
+    current_event: Mapped[int] = mapped_column(Integer)
+    as_of_utc: Mapped[datetime] = mapped_column(DateTime)
+
+
+class FplMyPicks(Base):
+    """My team selections per gameweek."""
+
+    __tablename__ = "fpl_my_picks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    event: Mapped[int] = mapped_column(Integer)
+    player_id: Mapped[int] = mapped_column(Integer)
+    position: Mapped[int] = mapped_column(Integer)  # 1-15, team position
+    is_captain: Mapped[bool] = mapped_column(Boolean)
+    is_vice_captain: Mapped[bool] = mapped_column(Boolean)
+    multiplier: Mapped[int] = mapped_column(Integer)  # captain=2, vice=1, others=1
+    as_of_utc: Mapped[datetime] = mapped_column(DateTime)
+
+
+class FplMyHistory(Base):
+    """My gameweek performance history."""
+
+    __tablename__ = "fpl_my_history"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    event: Mapped[int] = mapped_column(Integer)
+    points: Mapped[int] = mapped_column(Integer)
+    total_points: Mapped[int] = mapped_column(Integer)
+    rank: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    overall_rank: Mapped[int] = mapped_column(Integer)
+    bank: Mapped[int] = mapped_column(Integer)  # money in bank, in 0.1m units
+    value: Mapped[int] = mapped_column(Integer)  # team value, in 0.1m units
+    event_transfers: Mapped[int] = mapped_column(Integer)
+    event_transfers_cost: Mapped[int] = mapped_column(Integer)
+    points_on_bench: Mapped[int] = mapped_column(Integer)
+    as_of_utc: Mapped[datetime] = mapped_column(DateTime)

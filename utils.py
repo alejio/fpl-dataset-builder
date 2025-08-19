@@ -1,5 +1,6 @@
 """Utility functions for FPL dataset builder."""
 
+import os
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -30,3 +31,15 @@ def now_utc() -> datetime:
 def ensure_data_dir():
     """Create data directory if it doesn't exist."""
     Path("data").mkdir(exist_ok=True)
+
+
+def get_my_manager_id() -> int | None:
+    """Get MY_MANAGER_ID from environment variable or return default (4233026)."""
+    manager_id = os.getenv("MY_MANAGER_ID")
+    if manager_id:
+        try:
+            return int(manager_id)
+        except ValueError:
+            print(f"Warning: MY_MANAGER_ID '{manager_id}' is not a valid integer, using default")
+            return 4233026
+    return 4233026

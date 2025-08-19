@@ -158,11 +158,18 @@ class DatabaseOperations:
 
     def save_player_deltas_current(self, df: pd.DataFrame) -> None:
         """Save player deltas DataFrame to database."""
-        with next(get_session()) as session:
+        session = self.session_factory()
+        try:
             session.query(models.PlayerDeltasCurrent).delete()
             df_converted = convert_datetime_columns(df, ["as_of_utc"])
             records = df_converted.to_dict("records")
             session.bulk_insert_mappings(models.PlayerDeltasCurrent, records)
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
 
     def get_player_deltas_current(self) -> pd.DataFrame:
         """Get player deltas as DataFrame."""
@@ -172,11 +179,18 @@ class DatabaseOperations:
 
     def save_match_results_previous_season(self, df: pd.DataFrame) -> None:
         """Save match results DataFrame to database."""
-        with next(get_session()) as session:
+        session = self.session_factory()
+        try:
             session.query(models.MatchResultPreviousSeason).delete()
             df_converted = convert_datetime_columns(df, ["date_utc"])
             records = df_converted.to_dict("records")
             session.bulk_insert_mappings(models.MatchResultPreviousSeason, records)
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
 
     def get_match_results_previous_season(self) -> pd.DataFrame:
         """Get match results as DataFrame."""
@@ -186,7 +200,8 @@ class DatabaseOperations:
 
     def save_vaastav_full_player_history(self, df: pd.DataFrame) -> None:
         """Save Vaastav player history DataFrame to database."""
-        with next(get_session()) as session:
+        session = self.session_factory()
+        try:
             session.query(models.VaastavFullPlayerHistory).delete()
 
             # Select only the columns that exist in our model
@@ -221,6 +236,12 @@ class DatabaseOperations:
 
             records = df_filtered.to_dict("records")
             session.bulk_insert_mappings(models.VaastavFullPlayerHistory, records)
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
 
     def get_vaastav_full_player_history(self) -> pd.DataFrame:
         """Get Vaastav player history as DataFrame."""
@@ -242,6 +263,103 @@ class DatabaseOperations:
             data = [dict(zip(columns, row, strict=False)) for row in rows]
             return pd.DataFrame(data)
 
+    def save_my_manager_data(self, df: pd.DataFrame) -> None:
+        """Save my manager data DataFrame to database."""
+        session = self.session_factory()
+        try:
+            session.query(models.FplMyManager).delete()
+            df_converted = convert_datetime_columns(df, ["as_of_utc"])
+            records = df_converted.to_dict("records")
+            session.bulk_insert_mappings(models.FplMyManager, records)
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    def get_my_manager_data(self) -> pd.DataFrame:
+        """Get my manager data as DataFrame."""
+        with next(get_session()) as session:
+            query_result = session.query(models.FplMyManager).all()
+            return model_to_dataframe(models.FplMyManager, query_result)
+
+    def save_my_picks(self, df: pd.DataFrame) -> None:
+        """Save my picks DataFrame to database."""
+        session = self.session_factory()
+        try:
+            session.query(models.FplMyPicks).delete()
+            df_converted = convert_datetime_columns(df, ["as_of_utc"])
+            records = df_converted.to_dict("records")
+            session.bulk_insert_mappings(models.FplMyPicks, records)
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    def get_my_current_picks(self) -> pd.DataFrame:
+        """Get my current gameweek picks as DataFrame."""
+        with next(get_session()) as session:
+            # Get the latest event for current picks
+            latest_event = session.query(models.FplMyPicks.event).order_by(models.FplMyPicks.event.desc()).first()
+            if latest_event:
+                query_result = session.query(models.FplMyPicks).filter(models.FplMyPicks.event == latest_event[0]).all()
+                return model_to_dataframe(models.FplMyPicks, query_result)
+            return pd.DataFrame()
+
+    def get_my_picks_history(self) -> pd.DataFrame:
+        """Get all my picks history as DataFrame."""
+        with next(get_session()) as session:
+            query_result = session.query(models.FplMyPicks).all()
+            return model_to_dataframe(models.FplMyPicks, query_result)
+
+    def save_my_history(self, df: pd.DataFrame) -> None:
+        """Save my gameweek history DataFrame to database."""
+        session = self.session_factory()
+        try:
+            session.query(models.FplMyHistory).delete()
+            df_converted = convert_datetime_columns(df, ["as_of_utc"])
+            records = df_converted.to_dict("records")
+            session.bulk_insert_mappings(models.FplMyHistory, records)
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    def get_my_gameweek_history(self) -> pd.DataFrame:
+        """Get my gameweek history as DataFrame."""
+        with next(get_session()) as session:
+            query_result = session.query(models.FplMyHistory).all()
+            return model_to_dataframe(models.FplMyHistory, query_result)
+
+    def save_league_standings(self, df: pd.DataFrame) -> None:
+        """Save league standings DataFrame to database."""
+        session = self.session_factory()
+        try:
+            session.query(models.LeagueStandings).delete()
+            df_converted = convert_datetime_columns(df, ["as_of_utc"])
+            records = df_converted.to_dict("records")
+            session.bulk_insert_mappings(models.LeagueStandings, records)
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    def get_league_standings(self, league_id: int | None = None) -> pd.DataFrame:
+        """Get league standings as DataFrame."""
+        with next(get_session()) as session:
+            query = session.query(models.LeagueStandings)
+            if league_id is not None:
+                query = query.filter(models.LeagueStandings.league_id == league_id)
+            query_result = query.all()
+            return model_to_dataframe(models.LeagueStandings, query_result)
+
     def get_table_info(self) -> dict:
         """Get information about all tables in the database."""
         info = {}
@@ -256,6 +374,10 @@ class DatabaseOperations:
                 ("player_deltas_current", models.PlayerDeltasCurrent),
                 ("match_results_previous_season", models.MatchResultPreviousSeason),
                 ("vaastav_full_player_history_2024_2025", models.VaastavFullPlayerHistory),
+                ("league_standings_current", models.LeagueStandings),
+                ("fpl_my_manager", models.FplMyManager),
+                ("fpl_my_picks", models.FplMyPicks),
+                ("fpl_my_history", models.FplMyHistory),
             ]
 
             for table_name, model in tables:

@@ -22,6 +22,10 @@ def save_datasets_to_db(
     player_deltas_df: pd.DataFrame | None = None,
     match_results_df: pd.DataFrame | None = None,
     vaastav_df: pd.DataFrame | None = None,
+    league_standings_df: pd.DataFrame | None = None,
+    my_manager_df: pd.DataFrame | None = None,
+    my_picks_df: pd.DataFrame | None = None,
+    my_history_df: pd.DataFrame | None = None,
 ) -> None:
     """Save multiple datasets to database in a single operation."""
 
@@ -59,6 +63,22 @@ def save_datasets_to_db(
         db_ops.save_vaastav_full_player_history(vaastav_df)
         print(f"Saved {len(vaastav_df)} Vaastav player history records to database")
 
+    if league_standings_df is not None:
+        db_ops.save_league_standings(league_standings_df)
+        print(f"Saved {len(league_standings_df)} league standings to database")
+
+    if my_manager_df is not None:
+        db_ops.save_my_manager_data(my_manager_df)
+        print(f"Saved {len(my_manager_df)} manager data records to database")
+
+    if my_picks_df is not None:
+        db_ops.save_my_picks(my_picks_df)
+        print(f"Saved {len(my_picks_df)} manager picks to database")
+
+    if my_history_df is not None:
+        db_ops.save_my_history(my_history_df)
+        print(f"Saved {len(my_history_df)} manager history records to database")
+
 
 def get_database_summary() -> dict:
     """Get summary information about all database tables."""
@@ -79,6 +99,10 @@ def load_csv_data_to_db(data_dir: str = "data") -> None:
         "fpl_player_deltas_current.csv": lambda df: db_ops.save_player_deltas_current(df),
         "match_results_previous_season.csv": lambda df: db_ops.save_match_results_previous_season(df),
         "vaastav_full_player_history_2024_2025.csv": lambda df: db_ops.save_vaastav_full_player_history(df),
+        "fpl_league_standings_current.csv": lambda df: db_ops.save_league_standings(df),
+        "fpl_my_manager.csv": lambda df: db_ops.save_my_manager_data(df),
+        "fpl_my_current_picks.csv": lambda df: db_ops.save_my_picks(df),
+        "fpl_my_history.csv": lambda df: db_ops.save_my_history(df),
     }
 
     loaded_count = 0

@@ -129,6 +129,64 @@ class FPLDataClient:
         except Exception as e:
             raise RuntimeError(f"Failed to get database summary: {e}") from e
 
+    def get_my_manager_data(self) -> pd.DataFrame:
+        """Get my manager data (single row).
+
+        Returns:
+            DataFrame with my manager information
+        """
+        try:
+            return db_ops.get_my_manager_data()
+        except Exception as e:
+            raise RuntimeError(f"Failed to fetch my manager data: {e}") from e
+
+    def get_my_current_picks(self) -> pd.DataFrame:
+        """Get my current gameweek team picks.
+
+        Returns:
+            DataFrame with current gameweek team selection
+        """
+        try:
+            return db_ops.get_my_current_picks()
+        except Exception as e:
+            raise RuntimeError(f"Failed to fetch my current picks: {e}") from e
+
+    def get_my_picks_history(self) -> pd.DataFrame:
+        """Get all my picks history across all gameweeks.
+
+        Returns:
+            DataFrame with all gameweek picks history
+        """
+        try:
+            return db_ops.get_my_picks_history()
+        except Exception as e:
+            raise RuntimeError(f"Failed to fetch my picks history: {e}") from e
+
+    def get_my_gameweek_history(self) -> pd.DataFrame:
+        """Get my gameweek performance history.
+
+        Returns:
+            DataFrame with my performance history
+        """
+        try:
+            return db_ops.get_my_gameweek_history()
+        except Exception as e:
+            raise RuntimeError(f"Failed to fetch my gameweek history: {e}") from e
+
+    def get_league_standings(self, league_id: int | None = None) -> pd.DataFrame:
+        """Get league standings data.
+
+        Args:
+            league_id: Specific league ID, or None for all leagues
+
+        Returns:
+            DataFrame with league standings data
+        """
+        try:
+            return db_ops.get_league_standings(league_id)
+        except Exception as e:
+            raise RuntimeError(f"Failed to fetch league standings: {e}") from e
+
 
 # Global client instance for easy access
 _client = None
@@ -186,3 +244,28 @@ def get_vaastav_full_player_history() -> pd.DataFrame:
 def get_database_summary() -> dict:
     """Get summary information about database tables."""
     return _get_client().get_database_summary()
+
+
+def get_my_manager_data() -> pd.DataFrame:
+    """Get my manager data (single row)."""
+    return _get_client().get_my_manager_data()
+
+
+def get_my_current_picks() -> pd.DataFrame:
+    """Get my current gameweek team picks."""
+    return _get_client().get_my_current_picks()
+
+
+def get_my_picks_history() -> pd.DataFrame:
+    """Get all my picks history across all gameweeks."""
+    return _get_client().get_my_picks_history()
+
+
+def get_my_gameweek_history() -> pd.DataFrame:
+    """Get my gameweek performance history."""
+    return _get_client().get_my_gameweek_history()
+
+
+def get_league_standings(league_id: int | None = None) -> pd.DataFrame:
+    """Get league standings data."""
+    return _get_client().get_league_standings(league_id)

@@ -26,10 +26,11 @@ from fetchers import (
     normalize_teams,
     simple_name_match,
 )
+from fetchers.my_manager import fetch_my_manager_data, fetch_my_manager_history, fetch_my_manager_picks
 from safety import create_safety_backup, safe_csv_write, validate_data_integrity
 from safety.change_detector import change_detector
 from safety.cli import create_safety_cli
-from utils import ensure_data_dir
+from utils import ensure_data_dir, get_my_manager_id
 from validation import (
     FixturesSchema,
     GameweekLiveDataSchema,
@@ -65,7 +66,7 @@ def main(
         False, help="Update historical datasets (match results, player rates, gameweek data)"
     ),
     include_live: bool = typer.Option(True, help="Include live gameweek data and delta calculations"),
-    manager_id: int = typer.Option(None, help="FPL manager ID for league standings (optional)"),
+    manager_id: int = typer.Option(4233026, help="FPL manager ID for league standings"),
     save_to_database: bool = typer.Option(True, help="Save datasets to database alongside CSV files"),
 ):
     """Download and normalize FPL data into 10 core CSV/JSON files."""
@@ -263,13 +264,17 @@ def main(
                 manager_df = validate_dataframe(manager_df, ManagerSummarySchema, "fpl_manager_summary.csv")
                 safe_csv_write(manager_df, "fpl_manager_summary.csv", "main_run")
 
-                # Fetch league standings
+                # Fetch league standings for ALL leagues (not just manager's position)
                 league_ids = fetch_manager_leagues(manager_id)
                 if league_ids:
                     all_standings = []
-                    for league_id in league_ids[:5]:  # Limit to first 5 leagues
-                        standings = fetch_league_standings(league_id, manager_id)
-                        all_standings.extend(standings)
+                    successful_leagues = []
+
+                    for league_id in league_ids:  # Fetch ALL leagues, not just first 5
+                        standings = fetch_league_standings(league_id)  # Get full league, not just manager
+                        if standings:
+                            all_standings.extend(standings)
+                            successful_leagues.append(league_id)
 
                     if all_standings:
                         standings_df = pd.DataFrame([s.model_dump() for s in all_standings])
@@ -278,7 +283,20 @@ def main(
                         )
                         safe_csv_write(standings_df, "fpl_league_standings_current.csv", "main_run")
 
-                        typer.echo(f"✅ Manager data: {len(league_ids)} leagues, {len(standings_df)} standings")
+                        # Save to database
+                        if save_to_database:
+                            save_datasets_to_db(league_standings_df=standings_df)
+
+                        # Show your positions
+                        your_standings = standings_df[standings_df["entry"] == manager_id]
+                        typer.echo(
+                            f"✅ League standings: {len(successful_leagues)}/{len(league_ids)} leagues, {len(all_standings)} total entries"
+                        )
+                        for _, standing in your_standings.iterrows():
+                            league_size = len(standings_df[standings_df["league_id"] == standing["league_id"]])
+                            typer.echo(
+                                f"  📊 {standing['league_name']}: #{standing['rank']}/{league_size} ({standing['total']} pts)"
+                            )
                     else:
                         typer.echo("  ⚠️  No league standings found")
                 else:
@@ -287,6 +305,86 @@ def main(
                 typer.echo(f"  ⚠️  Could not fetch manager data for ID {manager_id}")
         else:
             typer.echo("  ℹ️  No manager ID provided, skipping league data")
+
+    # 3.6. Process MY_MANAGER_ID data if configured
+    my_manager_id = get_my_manager_id()
+    if my_manager_id:
+        typer.echo(f"\n🏠 Processing MY_MANAGER_ID data for {my_manager_id}...")
+
+        # Fetch my manager data
+        my_manager_data = fetch_my_manager_data(my_manager_id)
+        if my_manager_data:
+            my_manager_df = pd.DataFrame([my_manager_data.model_dump()])
+            safe_csv_write(my_manager_df, "fpl_my_manager.csv", "main_run")
+
+            # Fetch my current picks
+            my_picks_data = fetch_my_manager_picks(my_manager_id, current_gameweek)
+            if my_picks_data:
+                my_picks_df = pd.DataFrame([pick.model_dump() for pick in my_picks_data])
+                safe_csv_write(my_picks_df, "fpl_my_current_picks.csv", "main_run")
+
+            # Fetch my history
+            my_history_data = fetch_my_manager_history(my_manager_id)
+            if my_history_data:
+                my_history_df = pd.DataFrame([hist.model_dump() for hist in my_history_data])
+                safe_csv_write(my_history_df, "fpl_my_history.csv", "main_run")
+
+            # Fetch league standings for all leagues
+            typer.echo("🏆 Fetching league standings...")
+            league_ids = fetch_manager_leagues(my_manager_id)
+            league_standings_df = None
+
+            if league_ids:
+                all_standings = []
+                successful_leagues = []
+
+                for league_id in league_ids:
+                    standings = fetch_league_standings(league_id)  # Get full league standings
+                    if standings:
+                        all_standings.extend(standings)
+                        successful_leagues.append(league_id)
+
+                if all_standings:
+                    league_standings_df = pd.DataFrame([s.model_dump() for s in all_standings])
+                    league_standings_df = validate_dataframe(
+                        league_standings_df, LeagueStandingsSchema, "fpl_league_standings_current.csv"
+                    )
+                    safe_csv_write(league_standings_df, "fpl_league_standings_current.csv", "main_run")
+
+                    # Show your positions
+                    your_standings = league_standings_df[league_standings_df["entry"] == my_manager_id]
+                    typer.echo(
+                        f"✅ League standings: {len(successful_leagues)}/{len(league_ids)} leagues, {len(all_standings)} total entries"
+                    )
+                    for _, standing in your_standings.iterrows():
+                        league_size = len(
+                            league_standings_df[league_standings_df["league_id"] == standing["league_id"]]
+                        )
+                        typer.echo(
+                            f"  📊 {standing['league_name']}: #{standing['rank']}/{league_size} ({standing['total']} pts)"
+                        )
+                else:
+                    typer.echo("  ⚠️  No league standings found")
+            else:
+                typer.echo("  ⚠️  No leagues found for manager")
+
+            # Save to database if requested
+            if save_to_database:
+                typer.echo("🗄️ Saving my manager data to database...")
+                save_datasets_to_db(
+                    my_manager_df=my_manager_df if my_manager_data else None,
+                    my_picks_df=my_picks_df if my_picks_data else None,
+                    my_history_df=my_history_df if my_history_data else None,
+                    league_standings_df=league_standings_df,
+                )
+
+            typer.echo(
+                f"✅ My manager data: {len(my_picks_data) if my_picks_data else 0} picks, {len(my_history_data) if my_history_data else 0} history records"
+            )
+        else:
+            typer.echo(f"  ⚠️  Could not fetch data for MY_MANAGER_ID {my_manager_id}")
+    else:
+        typer.echo("  ℹ️  MY_MANAGER_ID not set in environment, skipping personal manager data")
 
     # 4. Fetch and validate external data (optional)
     if update_historical:
@@ -414,7 +512,7 @@ def main(
 
 @leagues_app.command("standings")
 def get_league_standings(
-    manager_id: int = typer.Argument(help="FPL manager ID"),
+    manager_id: int = typer.Argument(4233026, help="FPL manager ID"),
     league_id: int = typer.Option(None, help="Specific league ID (optional, shows all leagues if not provided)"),
 ):
     """Get current league standings for a manager."""
@@ -462,7 +560,7 @@ def get_league_standings(
 
 @leagues_app.command("summary")
 def get_manager_summary(
-    manager_id: int = typer.Argument(help="FPL manager ID"),
+    manager_id: int = typer.Argument(4233026, help="FPL manager ID"),
 ):
     """Get manager's team summary and performance."""
     typer.echo(f"👤 Fetching summary for manager {manager_id}...")

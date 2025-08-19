@@ -125,3 +125,38 @@ class ManagerSummary(BaseModel):
     team_value: int
     transfers_cost: int
     as_of_utc: AwareDatetime
+
+
+class MyManagerData(BaseModel):
+    manager_id: int
+    entry_name: str
+    player_first_name: str
+    player_last_name: str
+    summary_overall_points: int
+    summary_overall_rank: int
+    current_event: int
+    as_of_utc: AwareDatetime
+
+
+class MyManagerPicks(BaseModel):
+    event: int
+    player_id: int
+    position: int = Field(ge=1, le=15)
+    is_captain: bool
+    is_vice_captain: bool
+    multiplier: int = Field(ge=0, le=2)
+    as_of_utc: AwareDatetime
+
+
+class MyManagerHistory(BaseModel):
+    event: int
+    points: int
+    total_points: int
+    rank: int | None = None
+    overall_rank: int
+    bank: int
+    value: int
+    event_transfers: int
+    event_transfers_cost: int
+    points_on_bench: int
+    as_of_utc: AwareDatetime

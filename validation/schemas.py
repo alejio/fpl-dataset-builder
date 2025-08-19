@@ -177,7 +177,7 @@ class LeagueStandingsSchema(pa.DataFrameModel):
     entry_name: Series[str] = pa.Field(str_length={"min_value": 1})
     player_name: Series[str] = pa.Field(str_length={"min_value": 1})
     rank: Series[int] = pa.Field(ge=1)
-    last_rank: Series[pd.Int64Dtype] = pa.Field(ge=1, nullable=True)
+    last_rank: Series[pd.Int64Dtype] = pa.Field(ge=0, nullable=True)
     rank_sort: Series[int] = pa.Field(ge=1)
     total: Series[int] = pa.Field(ge=0)
     entry: Series[int] = pa.Field(ge=1)
