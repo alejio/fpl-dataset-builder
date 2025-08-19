@@ -28,7 +28,7 @@ uv run main.py main --help
 # Create manual backup of critical files
 uv run main.py safety backup --suffix "manual"
 
-# Validate data consistency 
+# Validate data consistency
 uv run main.py safety validate
 
 # Show dataset summary statistics
@@ -47,7 +47,7 @@ uv run main.py safety cleanup --days 7
 uv run ruff check .
 uv run ruff format .
 
-# Test data validation 
+# Test data validation
 uv run main.py safety validate
 ```
 
@@ -76,7 +76,7 @@ This is a synchronous Python application that fetches and normalizes Fantasy Pre
 ```
 
 ### Core features:
-- **Unified CLI**: Single entry point (`main.py`) with main pipeline and safety subcommands  
+- **Unified CLI**: Single entry point (`main.py`) with main pipeline and safety subcommands
 - **Data safety**: Automatic backups, integrity validation, safe file writes
 - **Modular design**: Focused packages with clear responsibilities
 - **Error handling**: Graceful failure with empty schema-compliant datasets
@@ -93,7 +93,7 @@ This is a synchronous Python application that fetches and normalizes Fantasy Pre
 8. Final data integrity validation and safe file writes
 
 ### Key dependencies:
-- **uv** - Package manager and runner  
+- **uv** - Package manager and runner
 - **pandas** - Data manipulation and CSV operations
 - **pydantic** - Data models and validation (v2)
 - **pandera** - DataFrame schema validation with Pydantic integration
@@ -111,11 +111,62 @@ All files are created in `data/` directory with automatic backups in `data/backu
 
 **Safety features:**
 - Automatic backups before any file modifications
-- Data integrity validation before and after operations  
+- Data integrity validation before and after operations
 - Safe CSV writes with rollback on failure
 - Timestamped backup files in `data/backups/`
 
 The application handles failures gracefully - if external data sources fail, it creates empty datasets with correct schemas rather than crashing. All datasets are validated using Pandera schemas and safe write operations ensure data integrity.
+
+## Client Library for Team Picker Integration
+
+The project provides a Python client library for easy database access, designed specifically for the `fpl-team-picker` project to replace CSV file dependencies.
+
+### Usage
+```python
+# Simple imports - replaces pd.read_csv() calls
+from fpl_dataset_builder.client import (
+    get_current_players,
+    get_current_teams,
+    get_fixtures_normalized,
+    get_player_xg_xa_rates,
+    get_gameweek_live_data
+)
+
+# Get DataFrames directly from database
+players_df = get_current_players()
+teams_df = get_current_teams()
+fixtures_df = get_fixtures_normalized()
+```
+
+### Migration from CSV
+```python
+# OLD WAY (CSV files):
+players = pd.read_csv(DATA_DIR / "fpl_players_current.csv")
+teams = pd.read_csv(DATA_DIR / "fpl_teams_current.csv")
+
+# NEW WAY (database):
+from fpl_dataset_builder.client import get_current_players, get_current_teams
+players = get_current_players()
+teams = get_current_teams()
+```
+
+### Available Functions
+- `get_current_players()` - Current season player data with stats, prices, positions
+- `get_current_teams()` - Team reference data (IDs, names, short names)
+- `get_fixtures_normalized()` - Fixture data with team IDs and kickoff times
+- `get_player_xg_xa_rates()` - Expected goals/assists rates per 90 minutes
+- `get_gameweek_live_data(gw=None)` - Live gameweek performance data
+- `get_player_deltas_current()` - Week-over-week performance tracking
+- `get_match_results_previous_season()` - Historical match results
+- `get_vaastav_full_player_history()` - Comprehensive historical statistics
+- `get_database_summary()` - Database status and row counts
+
+### Benefits
+- **Single source of truth**: Database-only, no CSV dependencies
+- **Always fresh data**: Automatically updated by weekly pipeline
+- **Better performance**: Database queries faster than CSV file reads
+- **Drop-in replacement**: Same DataFrame structure as CSV files
+- **Zero configuration**: Works out of the box with existing database
 
 ## Best Practices
 
