@@ -7,6 +7,7 @@ A minimal, synchronous script to download and normalize FPL data.
 import pandas as pd
 import typer
 
+from db_integration import initialize_database, save_datasets_to_db
 from fetchers import (
     calculate_player_deltas,
     create_injuries_template,
@@ -65,6 +66,7 @@ def main(
     ),
     include_live: bool = typer.Option(True, help="Include live gameweek data and delta calculations"),
     manager_id: int = typer.Option(None, help="FPL manager ID for league standings (optional)"),
+    save_to_database: bool = typer.Option(True, help="Save datasets to database alongside CSV files"),
 ):
     """Download and normalize FPL data into 10 core CSV/JSON files."""
 
@@ -91,6 +93,13 @@ def main(
 
     # Ensure data directory exists
     ensure_data_dir()
+
+    # Initialize database if requested
+    if save_to_database:
+        typer.echo("🗄️ Initializing database...")
+        initialize_database()
+        typer.echo("✅ Database ready")
+        typer.echo()
 
     # 1. Fetch FPL data
     bootstrap = fetch_fpl_bootstrap()
@@ -122,6 +131,11 @@ def main(
     safe_csv_write(teams_df, "fpl_teams_current.csv", "main_run")
     safe_csv_write(fixtures_df, "fpl_fixtures_normalized.csv", "main_run")
 
+    # Save to database if requested
+    if save_to_database:
+        typer.echo("🗄️ Saving core data to database...")
+        save_datasets_to_db(players_df=players_df, teams_df=teams_df, fixtures_df=fixtures_df)
+
     # Report changes
     typer.echo("📊 CHANGES DETECTED:")
     for df, filename in [(players_df, "fpl_players_current.csv"), (fixtures_df, "fpl_fixtures_normalized.csv")]:
@@ -139,6 +153,10 @@ def main(
             live_df = pd.DataFrame([ld.model_dump() for ld in live_data])
             live_df = validate_dataframe(live_df, GameweekLiveDataSchema, f"fpl_live_gameweek_{current_gameweek}.csv")
             safe_csv_write(live_df, f"fpl_live_gameweek_{current_gameweek}.csv", "main_run")
+
+            # Save to database if requested
+            if save_to_database:
+                save_datasets_to_db(gameweek_live_df=live_df, gameweek=current_gameweek)
 
             # Try to load previous gameweek data for delta calculation
             previous_live_df = None
@@ -213,6 +231,10 @@ def main(
                 deltas_df = validate_dataframe(deltas_df, PlayerDeltaSchema, "fpl_player_deltas_current.csv")
                 safe_csv_write(deltas_df, "fpl_player_deltas_current.csv", "main_run")
 
+                # Save to database if requested
+                if save_to_database:
+                    save_datasets_to_db(player_deltas_df=deltas_df)
+
                 # Report live data changes
                 live_change_report = change_detector.detect_and_report_changes(
                     f"fpl_live_gameweek_{current_gameweek}.csv", live_df
@@ -284,6 +306,10 @@ def main(
             safe_csv_write(unmatched_names, "unmatched_player_names_fpl_fpl.csv", "main_run")
             matched_count = len(matched_rates[matched_rates["player_id"].notna()])
             unmatched_count = len(unmatched_names)
+
+            # Save to database if requested
+            if save_to_database:
+                save_datasets_to_db(match_results_df=results_df, player_rates_df=matched_rates)
         else:
             # Empty datasets
             empty_rates = pd.DataFrame(columns=["player", "team", "season", "xG90", "xA90", "minutes", "player_id"])
@@ -294,6 +320,15 @@ def main(
 
         # 6. Download historical GW data
         download_vaastav_merged_gw(historical_season)
+
+        # Save Vaastav data to database if requested (one-time historical migration)
+        if save_to_database:
+            try:
+                vaastav_df = pd.read_csv(f"data/vaastav_full_player_history_{historical_season.replace('-', '_')}.csv")
+                save_datasets_to_db(vaastav_df=vaastav_df)
+                typer.echo("💾 One-time Vaastav historical data migrated to database")
+            except FileNotFoundError:
+                typer.echo("⚠️ Vaastav data not found, skipping database save")
     else:
         typer.echo("⏭️  Skipping historical data updates (use --update-historical to enable)")
         # Set default values for summary
