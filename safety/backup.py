@@ -6,8 +6,6 @@ import shutil
 from datetime import datetime
 from pathlib import Path
 
-import pandas as pd
-
 # Set up logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -23,12 +21,9 @@ class DataSafetyManager:
 
         # Critical files that need extra protection
         self.critical_files = {
-            "fpl_players_current.csv",
-            "fpl_teams_current.csv",
-            "fpl_player_xg_xa_rates.csv",
-            "vaastav_full_player_history_2024_2025.csv",
-            "fpl_fixtures_normalized.csv",
-            "fpl_historical_gameweek_data.csv",
+            "fpl_data.db",  # Main database file
+            "fpl_raw_bootstrap.json",  # Raw API data backup
+            "fpl_raw_fixtures.json",  # Raw fixtures backup
         }
 
     def create_backup(self, filename: str, backup_suffix: str = None) -> Path:
@@ -85,66 +80,102 @@ class DataSafetyManager:
 
         return True
 
-    def safe_write_csv(self, df: pd.DataFrame, filename: str, backup_suffix: str = None) -> bool:
-        """Safely write a DataFrame to CSV with backup and validation."""
-        filepath = self.data_dir / filename
+    def safe_backup_database(self, backup_suffix: str = None) -> bool:
+        """Safely backup the database with validation."""
+        db_filename = "fpl_data.db"
+        db_path = self.data_dir / db_filename
 
-        # Create backup if file exists
-        backup_path = None
-        if filepath.exists():
-            backup_path = self.create_backup(filename, backup_suffix or "pre_write")
+        if not db_path.exists():
+            logger.warning(f"Database file {db_filename} does not exist, skipping backup")
+            return False
 
         try:
-            # Write to temporary file first
-            temp_path = filepath.with_suffix(".tmp")
-            df.to_csv(temp_path, index=False)
+            # Create timestamped backup
+            backup_path = self.create_backup(db_filename, backup_suffix or "db_backup")
 
-            # Validate the temporary file
-            temp_df = pd.read_csv(temp_path)
-            if len(temp_df) == 0:
-                raise ValueError("Written file is empty")
+            if backup_path:
+                # Verify backup integrity
+                original_hash = self.get_file_hash(db_path)
+                backup_hash = self.get_file_hash(backup_path)
 
-            # Move temp file to final location
-            shutil.move(temp_path, filepath)
-
-            # Verify the write was successful
-            verify_df = pd.read_csv(filepath)
-            if len(verify_df) != len(df):
-                raise ValueError(f"Row count mismatch: expected {len(df)}, got {len(verify_df)}")
-
-            logger.info(f"Successfully wrote {len(df)} rows to {filename}")
-            return True
+                if original_hash == backup_hash:
+                    logger.info(f"Database backup verified: {backup_path}")
+                    return True
+                else:
+                    logger.error("Database backup integrity check failed")
+                    return False
+            else:
+                logger.error("Failed to create database backup")
+                return False
 
         except Exception as e:
-            logger.error(f"Failed to write {filename}: {e}")
-
-            # Restore from backup if available
-            if backup_path and backup_path.exists():
-                shutil.copy2(backup_path, filepath)
-                logger.info(f"Restored {filename} from backup")
-
-            # Clean up temp file
-            if temp_path.exists():
-                temp_path.unlink()
-
+            logger.error(f"Error during database backup: {e}")
             return False
 
     def get_data_summary(self) -> dict[str, dict]:
-        """Get summary statistics for all datasets."""
+        """Get summary statistics for database and critical files."""
         summary = {}
 
         for filename in self.critical_files:
             filepath = self.data_dir / filename
             if filepath.exists():
                 try:
-                    df = pd.read_csv(filepath)
-                    summary[filename] = {
-                        "rows": len(df),
-                        "columns": len(df.columns),
-                        "size_mb": round(filepath.stat().st_size / (1024 * 1024), 2),
-                        "last_modified": datetime.fromtimestamp(filepath.stat().st_mtime).isoformat(),
-                        "hash": self.get_file_hash(filepath),
-                    }
+                    if filename.endswith(".db"):
+                        # Database file summary
+                        from sqlalchemy import text
+
+                        from db.database import SessionLocal
+
+                        try:
+                            session = SessionLocal()
+                            try:
+                                # Get table count
+                                table_result = session.execute(
+                                    text(
+                                        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+                                    )
+                                )
+                                table_count = table_result.scalar()
+
+                                summary[filename] = {
+                                    "type": "database",
+                                    "tables": table_count,
+                                    "size_mb": round(filepath.stat().st_size / (1024 * 1024), 2),
+                                    "last_modified": datetime.fromtimestamp(filepath.stat().st_mtime).isoformat(),
+                                    "hash": self.get_file_hash(filepath),
+                                }
+                            finally:
+                                session.close()
+                        except Exception as db_error:
+                            summary[filename] = {
+                                "type": "database",
+                                "size_mb": round(filepath.stat().st_size / (1024 * 1024), 2),
+                                "last_modified": datetime.fromtimestamp(filepath.stat().st_mtime).isoformat(),
+                                "error": f"Database connection failed: {db_error}",
+                            }
+                    elif filename.endswith(".json"):
+                        # JSON file summary
+                        import json
+
+                        with open(filepath) as f:
+                            data = json.load(f)
+
+                        summary[filename] = {
+                            "type": "json",
+                            "size_mb": round(filepath.stat().st_size / (1024 * 1024), 2),
+                            "last_modified": datetime.fromtimestamp(filepath.stat().st_mtime).isoformat(),
+                            "hash": self.get_file_hash(filepath),
+                            "structure": list(data.keys()) if isinstance(data, dict) else "array",
+                        }
+                    else:
+                        # Generic file summary
+                        summary[filename] = {
+                            "type": "file",
+                            "size_mb": round(filepath.stat().st_size / (1024 * 1024), 2),
+                            "last_modified": datetime.fromtimestamp(filepath.stat().st_mtime).isoformat(),
+                            "hash": self.get_file_hash(filepath),
+                        }
+
                 except Exception as e:
                     summary[filename] = {"error": str(e)}
             else:
@@ -196,9 +227,9 @@ class DataSafetyManager:
 data_safety = DataSafetyManager()
 
 
-def safe_csv_write(df: pd.DataFrame, filename: str, backup_suffix: str = None) -> bool:
-    """Convenience function for safe CSV writing."""
-    return data_safety.safe_write_csv(df, filename, backup_suffix)
+def safe_database_backup(backup_suffix: str = None) -> bool:
+    """Convenience function for safe database backup."""
+    return data_safety.safe_backup_database(backup_suffix)
 
 
 def create_safety_backup(backup_suffix: str = "safety_backup") -> dict[str, Path]:

@@ -2,8 +2,8 @@
 
 import typer
 
-from .backup import create_safety_backup, data_safety
-from .integrity import validate_data_integrity
+from .backup import create_safety_backup, data_safety, safe_database_backup
+from .integrity import validate_data_integrity, validate_raw_data_completeness
 
 
 def create_safety_cli() -> typer.Typer:
@@ -29,16 +29,20 @@ def create_safety_cli() -> typer.Typer:
 
     @app.command()
     def summary():
-        """Show summary of all datasets."""
+        """Show summary of database and critical files."""
         summary = data_safety.get_data_summary()
-        typer.echo("📊 Dataset Summary:")
+        typer.echo("📊 Data Summary:")
         for filename, info in summary.items():
             if "error" in info:
                 typer.echo(f"  ❌ {filename}: {info['error']}")
             elif "status" in info:
                 typer.echo(f"  ⚠️  {filename}: {info['status']}")
+            elif info.get("type") == "database":
+                typer.echo(f"  🗄️  {filename}: {info.get('tables', '?')} tables, {info['size_mb']} MB")
+            elif info.get("type") == "json":
+                typer.echo(f"  📄 {filename}: JSON data, {info['size_mb']} MB")
             else:
-                typer.echo(f"  ✅ {filename}: {info['rows']:,} rows, {info['size_mb']} MB")
+                typer.echo(f"  📁 {filename}: {info['size_mb']} MB")
 
     @app.command()
     def restore(filename: str, timestamp: str = typer.Option(None, help="Backup timestamp")):
@@ -54,5 +58,36 @@ def create_safety_cli() -> typer.Typer:
         """Clean up old backup files."""
         data_safety.cleanup_old_backups(days)
         typer.echo(f"✅ Cleaned up backups older than {days} days")
+
+    @app.command()
+    def completeness():
+        """Show raw data capture completeness statistics."""
+        results = validate_raw_data_completeness()
+        typer.echo("📊 Raw Data Capture Completeness:")
+
+        if "error" in results:
+            typer.echo(f"  ❌ Error: {results['error']}")
+            return
+
+        for table, stats in results.items():
+            if isinstance(stats, dict):
+                completeness = stats.get("completeness_percent", 0)
+                rows = stats.get("row_count", 0)
+                captured = stats.get("columns_captured", 0)
+                expected = stats.get("expected_columns", 0)
+
+                status = "✅" if completeness >= 95 else "⚠️" if completeness >= 80 else "❌"
+                typer.echo(
+                    f"  {status} {table}: {completeness}% complete ({captured}/{expected} fields, {rows:,} rows)"
+                )
+
+    @app.command()
+    def backup_db(suffix: str = typer.Option("manual_db_backup", help="Backup suffix")):
+        """Create a backup of the database file."""
+        success = safe_database_backup(suffix)
+        if success:
+            typer.echo("✅ Database backup created successfully")
+        else:
+            typer.echo("❌ Failed to create database backup")
 
     return app

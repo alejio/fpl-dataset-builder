@@ -1,14 +1,15 @@
 """Safety package for FPL dataset builder data protection."""
 
-from .backup import DataSafetyManager, create_safety_backup, safe_csv_write
+from .backup import DataSafetyManager, create_safety_backup, safe_database_backup
 from .change_detector import ChangeDetector, change_detector
-from .integrity import validate_data_integrity
+from .integrity import validate_data_integrity, validate_raw_data_completeness
 
 __all__ = [
     "DataSafetyManager",
-    "safe_csv_write",
+    "safe_database_backup",
     "create_safety_backup",
     "validate_data_integrity",
+    "validate_raw_data_completeness",
     "ChangeDetector",
     "change_detector",
 ]

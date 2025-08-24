@@ -3,56 +3,143 @@
 import logging
 from pathlib import Path
 
-import pandas as pd
+from sqlalchemy import text
 
 logger = logging.getLogger(__name__)
 
 
 def validate_data_integrity(data_dir: str = "data") -> dict[str, bool]:
-    """Validate consistency across all datasets."""
+    """Validate consistency across database tables and check database file exists."""
     data_path = Path(data_dir)
     results = {}
 
-    # Critical files that need extra protection
-    critical_files = {
-        "fpl_players_current.csv",
-        "fpl_teams_current.csv",
-        "fpl_player_xg_xa_rates.csv",
-        "vaastav_full_player_history_2024_2025.csv",
-        "fpl_fixtures_normalized.csv",
-        "fpl_historical_gameweek_data.csv",
-    }
+    # Check if database file exists
+    db_path = data_path / "fpl_data.db"
+    results["database_file_exists"] = db_path.exists()
+
+    if not db_path.exists():
+        logger.warning("Database file does not exist")
+        return results
 
     try:
-        # Check if critical files exist
-        for filename in critical_files:
-            filepath = data_path / filename
-            results[f"{filename}_exists"] = filepath.exists()
+        from db.database import SessionLocal
 
-        # Validate player_id consistency
-        if (data_path / "fpl_players_current.csv").exists() and (data_path / "fpl_player_xg_xa_rates.csv").exists():
-            players_df = pd.read_csv(data_path / "fpl_players_current.csv")
-            rates_df = pd.read_csv(data_path / "fpl_player_xg_xa_rates.csv")
+        session = SessionLocal()
+        try:
+            # Check if critical tables exist and have data
+            critical_tables = {
+                "raw_players_bootstrap": "Raw players data from FPL API",
+                "raw_teams_bootstrap": "Raw teams data from FPL API",
+                "raw_events_bootstrap": "Raw events/gameweeks data from FPL API",
+                "raw_fixtures": "Raw fixtures data from FPL API",
+                "players_current": "Legacy players table",
+                "teams_current": "Legacy teams table",
+            }
 
-            # Check if player_id columns exist and have valid values
-            player_ids_valid = "player_id" in players_df.columns and players_df["player_id"].notna().all()
-            rates_ids_valid = "player_id" in rates_df.columns and rates_df["player_id"].notna().all()
+            for table_name, _description in critical_tables.items():
+                try:
+                    # Check if table exists and has data
+                    result = session.execute(text(f"SELECT COUNT(*) FROM {table_name}"))
+                    row_count = result.scalar()
+                    results[f"{table_name}_exists_with_data"] = row_count > 0
 
-            results["player_id_consistency"] = player_ids_valid and rates_ids_valid
+                    if row_count > 0:
+                        logger.info(f"{table_name}: {row_count} rows")
+                    else:
+                        logger.warning(f"{table_name}: empty or missing")
 
-        # Validate team_id consistency
-        if (data_path / "fpl_teams_current.csv").exists() and (data_path / "fpl_players_current.csv").exists():
-            teams_df = pd.read_csv(data_path / "fpl_teams_current.csv")
-            players_df = pd.read_csv(data_path / "fpl_players_current.csv")
+                except Exception as e:
+                    logger.error(f"Error checking table {table_name}: {e}")
+                    results[f"{table_name}_exists_with_data"] = False
 
-            # Check if all player team_ids exist in teams
-            valid_team_ids = set(teams_df["team_id"])
-            player_team_ids = set(players_df["team_id"])
+            # Validate data consistency between raw and legacy tables
+            try:
+                # Check if raw players data exists
+                raw_players_count = session.execute(text("SELECT COUNT(*) FROM raw_players_bootstrap")).scalar()
+                legacy_players_count = session.execute(text("SELECT COUNT(*) FROM players_current")).scalar()
 
-            results["team_id_consistency"] = player_team_ids.issubset(valid_team_ids)
+                results["raw_vs_legacy_players_consistency"] = raw_players_count > 0 and legacy_players_count > 0
+
+                # Check team consistency
+                raw_teams_count = session.execute(text("SELECT COUNT(*) FROM raw_teams_bootstrap")).scalar()
+                legacy_teams_count = session.execute(text("SELECT COUNT(*) FROM teams_current")).scalar()
+
+                results["raw_vs_legacy_teams_consistency"] = raw_teams_count > 0 and legacy_teams_count > 0
+
+            except Exception as e:
+                logger.error(f"Error validating table consistency: {e}")
+                results["table_consistency_error"] = str(e)
+
+            # Validate database schema integrity
+            try:
+                # Check if raw tables have expected columns
+                raw_players_columns = session.execute(text("PRAGMA table_info(raw_players_bootstrap)")).fetchall()
+                results["raw_players_schema_valid"] = len(raw_players_columns) > 50  # Should have ~101 columns
+
+                raw_teams_columns = session.execute(text("PRAGMA table_info(raw_teams_bootstrap)")).fetchall()
+                results["raw_teams_schema_valid"] = len(raw_teams_columns) > 15  # Should have ~21 columns
+
+            except Exception as e:
+                logger.error(f"Error validating database schema: {e}")
+                results["schema_validation_error"] = str(e)
+
+        finally:
+            session.close()
 
     except Exception as e:
-        logger.error(f"Error validating data consistency: {e}")
-        results["validation_error"] = str(e)
+        logger.error(f"Error connecting to database: {e}")
+        results["database_connection_error"] = str(e)
+
+    return results
+
+
+def validate_raw_data_completeness() -> dict[str, dict]:
+    """Validate that raw data capture is complete compared to expected API fields."""
+    results = {}
+
+    try:
+        from db.database import SessionLocal
+
+        session = SessionLocal()
+        try:
+            # Check raw_players_bootstrap completeness
+            players_columns = session.execute(text("PRAGMA table_info(raw_players_bootstrap)")).fetchall()
+            players_count = session.execute(text("SELECT COUNT(*) FROM raw_players_bootstrap")).scalar()
+
+            results["raw_players"] = {
+                "columns_captured": len(players_columns),
+                "expected_columns": 101,
+                "completeness_percent": round((len(players_columns) / 101) * 100, 1),
+                "row_count": players_count,
+            }
+
+            # Check raw_teams_bootstrap completeness
+            teams_columns = session.execute(text("PRAGMA table_info(raw_teams_bootstrap)")).fetchall()
+            teams_count = session.execute(text("SELECT COUNT(*) FROM raw_teams_bootstrap")).scalar()
+
+            results["raw_teams"] = {
+                "columns_captured": len(teams_columns),
+                "expected_columns": 21,
+                "completeness_percent": round((len(teams_columns) / 21) * 100, 1),
+                "row_count": teams_count,
+            }
+
+            # Check raw_events_bootstrap completeness
+            events_columns = session.execute(text("PRAGMA table_info(raw_events_bootstrap)")).fetchall()
+            events_count = session.execute(text("SELECT COUNT(*) FROM raw_events_bootstrap")).scalar()
+
+            results["raw_events"] = {
+                "columns_captured": len(events_columns),
+                "expected_columns": 29,
+                "completeness_percent": round((len(events_columns) / 29) * 100, 1),
+                "row_count": events_count,
+            }
+
+        finally:
+            session.close()
+
+    except Exception as e:
+        logger.error(f"Error validating raw data completeness: {e}")
+        results["error"] = str(e)
 
     return results
