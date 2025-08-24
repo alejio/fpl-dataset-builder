@@ -43,8 +43,8 @@ uv run main.py safety validate
 # Show dataset summary statistics
 uv run main.py safety summary
 
-# Restore file from backup
-uv run main.py safety restore fpl_players_current.csv
+# Backup database
+uv run main.py safety backup-db
 
 # Clean up old backups (7+ days)
 uv run main.py safety cleanup --days 7
@@ -120,22 +120,18 @@ This is a synchronous Python application that fetches and normalizes Fantasy Pre
 - **Validation**: Comprehensive Pandera schemas for all data outputs
 
 ### Data flow:
-1. Pre-flight safety checks: validate existing data and create backups
+1. Pre-flight safety checks: validate existing database data and create backups
 2. Initialize SQLite database with automatic table creation
 3. Fetch raw FPL data (bootstrap-static, fixtures) from official API
-4. Normalize into structured models and validate with Pandera schemas
-5. Fetch external data (match results from vaastav GitHub repo)
-6. Fetch personal manager data (picks, history, performance) using default manager ID (4233026)
-7. Automatically fetch league standings for ALL leagues manager participates in
-8. Create empty player rates dataset for manual population
-9. Download historical gameweek data from vaastav/Fantasy-Premier-League GitHub repo
-10. Generate and validate injuries template for top 40 players by price
-11. Save all datasets to both CSV files and database tables
-12. Final data integrity validation and safe file writes
+4. Process and validate raw data with Pandera schemas
+5. Save raw data to database tables (complete API capture)
+6. Process derived analytics from raw data (advanced metrics, valuations, trends)
+7. Save derived analytics to database tables
+8. Database-only storage with comprehensive indexing
 
 ### Key dependencies:
 - **uv** - Package manager and runner
-- **pandas** - Data manipulation and CSV operations
+- **pandas** - Data manipulation and DataFrame operations
 - **pydantic** - Data models and validation (v2)
 - **pandera** - DataFrame schema validation with Pydantic integration
 - **sqlalchemy** - Database ORM and query builder (v2.0)
@@ -144,40 +140,35 @@ This is a synchronous Python application that fetches and normalizes Fantasy Pre
 - **requests** - HTTP client for API calls
 
 ### Output structure:
-All files are created in `data/` directory with automatic backups in `data/backups/`, plus SQLite database at `data/fpl_data.db`:
+Database-only architecture with SQLite database at `data/fpl_data.db`:
 
-**Core datasets (CSV + Database):**
-- Raw JSON: `fpl_raw_bootstrap.json`, `fpl_raw_fixtures.json`
-- Normalized CSV: `fpl_players_current.csv`, `fpl_teams_current.csv`, `fpl_fixtures_normalized.csv`
-- External data: `match_results_previous_season.csv`, `fpl_player_xg_xa_rates.csv`, `fpl_historical_gameweek_data.csv`
-- Manager data: `fpl_my_manager.csv`, `fpl_my_picks.csv`, `fpl_my_history.csv`
-- League data: `fpl_league_standings_current.csv` - Complete standings for all participating leagues
-- Live data: `fpl_live_gameweek_{n}.csv`, `fpl_player_deltas_current.csv`
-- Templates: `injury_tracking_template.csv`, `unmatched_player_names_fpl_fpl.csv`
-
-**Database tables:**
-- Core: `players_current`, `teams_current`, `fixtures_normalized`
-- External: `player_xg_xa_rates`, `match_results_previous_season`, `vaastav_full_player_history_2024_2025`
-- Live: `gameweek_live_data`, `player_deltas_current`
-- Manager: `fpl_my_manager`, `fpl_my_picks`, `fpl_my_history`
-- League: `league_standings_current` - All league standings with complete participant data
+- **Raw Data**: Complete FPL API capture (9 tables with 100% field coverage)
+  - `raw_players_bootstrap`, `raw_teams_bootstrap`, `raw_events_bootstrap`
+  - `raw_game_settings`, `raw_element_stats`, `raw_element_types`
+  - `raw_chips`, `raw_phases`, `raw_fixtures`
+- **Derived Analytics**: Advanced metrics and insights (5 tables)
+  - `derived_player_metrics`, `derived_team_form`, `derived_fixture_difficulty`
+  - `derived_value_analysis`, `derived_ownership_trends`
+- **Legacy Compatibility**: Backward-compatible normalized data
+  - `players_current`, `teams_current`, `fixtures_normalized`
+  - `gameweek_live_data`, `player_deltas_current`, `league_standings_current`
+  - `fpl_my_manager`, `fpl_my_picks`, `fpl_my_history`
 
 **Safety features:**
-- Automatic backups before any file modifications
+- Automatic database backups before any modifications
 - Data integrity validation before and after operations
-- Safe CSV writes with rollback on failure
 - Database transactions with automatic rollback on errors
 - Timestamped backup files in `data/backups/`
 
-The application handles failures gracefully - if external data sources fail, it creates empty datasets with correct schemas rather than crashing. All datasets are validated using Pandera schemas and safe write operations ensure data integrity. Both CSV files and database tables are maintained for backward compatibility and flexible data access patterns.
+The application handles failures gracefully - if external data sources fail, it creates empty datasets with correct schemas rather than crashing. All datasets are validated using Pandera schemas and database transactions ensure data integrity. Database-only architecture provides consistent access patterns and automatic indexing.
 
 ## Client Library for Team Picker Integration
 
-The project provides a Python client library for easy database access, designed specifically for the `fpl-team-picker` project to replace CSV file dependencies.
+The project provides a Python client library for easy database access, designed specifically for the `fpl-team-picker` project with comprehensive data access patterns.
 
 ### Usage
 ```python
-# Simple imports - replaces pd.read_csv() calls
+# Simple database imports
 from fpl_dataset_builder.client import (
     get_current_players,
     get_current_teams,
@@ -271,11 +262,7 @@ ownership_trends = get_derived_ownership_trends()
 
 ### Migration from CSV
 ```python
-# OLD WAY (CSV files):
-players = pd.read_csv(DATA_DIR / "fpl_players_current.csv")
-teams = pd.read_csv(DATA_DIR / "fpl_teams_current.csv")
-
-# NEW WAY (database):
+# Database-only approach:
 from fpl_dataset_builder.client import get_current_players, get_current_teams
 players = get_current_players()
 teams = get_current_teams()

@@ -6,7 +6,7 @@ A minimal, synchronous script to download and normalize FPL data.
 
 import typer
 
-from db_integration import initialize_database
+from db.database import initialize_database
 from fetchers import (
     fetch_fpl_bootstrap,
     fetch_fpl_fixtures,

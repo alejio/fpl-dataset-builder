@@ -31,9 +31,15 @@ def fetch_results_last_season(season: str) -> pd.DataFrame:
         # Filter for completed matches (both scores not null)
         completed_matches = fixtures_df.dropna(subset=["team_h_score", "team_a_score"])
 
-        # Create team ID to name mapping from our teams data
-        teams_df = pd.read_csv("data/fpl_teams_current.csv")
-        team_id_to_name = dict(zip(teams_df["team_id"], teams_df["name"], strict=False))
+        # Create team ID to name mapping from database
+        from db.operations import db_ops
+
+        try:
+            teams_df = db_ops.get_teams_current()
+            team_id_to_name = dict(zip(teams_df["team_id"], teams_df["name"], strict=False))
+        except Exception:
+            # Fallback if database not available
+            team_id_to_name = {}
 
         # Normalize to our schema
         results = []

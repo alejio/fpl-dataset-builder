@@ -9,7 +9,7 @@ from .database import Base
 
 
 class PlayerCurrent(Base):
-    """Current season player information - mirrors fpl_players_current.csv."""
+    """Current season player information (legacy normalized data)."""
 
     __tablename__ = "players_current"
 
@@ -26,7 +26,7 @@ class PlayerCurrent(Base):
 
 
 class TeamCurrent(Base):
-    """Current Premier League teams - mirrors fpl_teams_current.csv."""
+    """Current Premier League teams (legacy normalized data)."""
 
     __tablename__ = "teams_current"
 
@@ -37,7 +37,7 @@ class TeamCurrent(Base):
 
 
 class FixtureNormalized(Base):
-    """Normalized fixture data - mirrors fpl_fixtures_normalized.csv."""
+    """Normalized fixture data (legacy normalized data)."""
 
     __tablename__ = "fixtures_normalized"
 
@@ -50,7 +50,7 @@ class FixtureNormalized(Base):
 
 
 class MatchResultPreviousSeason(Base):
-    """Historical match results - mirrors match_results_previous_season.csv."""
+    """Historical match results from previous season."""
 
     __tablename__ = "match_results_previous_season"
 
@@ -64,7 +64,7 @@ class MatchResultPreviousSeason(Base):
 
 
 class PlayerXGXARates(Base):
-    """Player xG/xA rates - mirrors fpl_player_xg_xa_rates.csv."""
+    """Player expected goals and assists rates per 90 minutes."""
 
     __tablename__ = "player_xg_xa_rates"
 
@@ -83,7 +83,7 @@ class PlayerXGXARates(Base):
 
 
 class GameweekLiveData(Base):
-    """Live gameweek performance data - mirrors fpl_live_gameweek_{n}.csv."""
+    """Live gameweek performance data."""
 
     __tablename__ = "gameweek_live_data"
 
@@ -118,7 +118,7 @@ class GameweekLiveData(Base):
 
 
 class PlayerDeltasCurrent(Base):
-    """Player performance deltas - mirrors fpl_player_deltas_current.csv."""
+    """Player performance deltas between gameweeks."""
 
     __tablename__ = "player_deltas_current"
 
@@ -137,7 +137,7 @@ class PlayerDeltasCurrent(Base):
 
 
 class HistoricalGameweekData(Base):
-    """Historical gameweek data - mirrors fpl_historical_gameweek_data.csv."""
+    """Historical gameweek data from external sources."""
 
     __tablename__ = "historical_gameweek_data"
 
@@ -150,11 +150,11 @@ class HistoricalGameweekData(Base):
 
 
 class VaastavFullPlayerHistory(Base):
-    """Vaastav full player history - mirrors vaastav_full_player_history_2024_2025.csv."""
+    """Vaastav full player history data."""
 
     __tablename__ = "vaastav_full_player_history_2024_2025"
 
-    # Using actual CSV column names from vaastav data
+    # Using actual column names from vaastav data
     assists: Mapped[int | None] = mapped_column(Integer, nullable=True)
     bonus: Mapped[int | None] = mapped_column(Integer, nullable=True)
     bps: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -166,7 +166,7 @@ class VaastavFullPlayerHistory(Base):
     form: Mapped[float | None] = mapped_column(Float, nullable=True)
     goals_scored: Mapped[int | None] = mapped_column(Integer, nullable=True)
     ict_index: Mapped[float | None] = mapped_column(Float, nullable=True)
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)  # Don't auto-increment, use CSV id
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)  # Don't auto-increment, use external data id
     influence: Mapped[float | None] = mapped_column(Float, nullable=True)
     minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     points_per_game: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -182,7 +182,7 @@ class VaastavFullPlayerHistory(Base):
 
 
 class InjuryTrackingTemplate(Base):
-    """Injury tracking template - mirrors injury_tracking_template.csv."""
+    """Injury tracking template for manual data entry."""
 
     __tablename__ = "injury_tracking_template"
 
@@ -194,7 +194,7 @@ class InjuryTrackingTemplate(Base):
 
 
 class LeagueStandings(Base):
-    """League standings data - mirrors fpl_league_standings_current.csv."""
+    """League standings data."""
 
     __tablename__ = "league_standings_current"
 
@@ -213,7 +213,7 @@ class LeagueStandings(Base):
 
 
 class ManagerSummary(Base):
-    """Manager summary data - mirrors fpl_manager_summary.csv."""
+    """Manager summary data."""
 
     __tablename__ = "manager_summary"
 

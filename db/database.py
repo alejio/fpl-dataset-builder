@@ -51,3 +51,9 @@ def create_tables() -> None:
 def drop_tables() -> None:
     """Drop all tables in the database."""
     Base.metadata.drop_all(bind=engine)
+
+
+def initialize_database() -> None:
+    """Initialize the database by creating all tables."""
+    create_tables()
+    print("Database initialized with all tables created.")
