@@ -4,7 +4,7 @@ import pandas as pd
 from sqlalchemy import text
 from sqlalchemy.inspection import inspect
 
-from . import models, models_raw
+from . import models, models_derived, models_raw
 from .database import SessionLocal, get_session
 
 
@@ -581,6 +581,171 @@ class DatabaseOperations:
                 info[table_name] = {"row_count": count}
 
         return info
+
+    # Derived data operations for analytics
+    def save_derived_player_metrics(self, df: pd.DataFrame) -> None:
+        """Save derived player metrics DataFrame to database."""
+        session = self.session_factory()
+        try:
+            # Clear existing derived data
+            session.query(models_derived.DerivedPlayerMetrics).delete()
+
+            # Convert datetime columns
+            df_converted = convert_datetime_columns(df, ["calculation_date"])
+
+            # Save to database
+            records = df_converted.to_dict("records")
+            session.bulk_insert_mappings(models_derived.DerivedPlayerMetrics, records)
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    def save_derived_team_form(self, df: pd.DataFrame) -> None:
+        """Save derived team form DataFrame to database."""
+        session = self.session_factory()
+        try:
+            session.query(models_derived.DerivedTeamForm).delete()
+            df_converted = convert_datetime_columns(df, ["last_updated"])
+            records = df_converted.to_dict("records")
+            session.bulk_insert_mappings(models_derived.DerivedTeamForm, records)
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    def save_derived_fixture_difficulty(self, df: pd.DataFrame) -> None:
+        """Save derived fixture difficulty DataFrame to database."""
+        session = self.session_factory()
+        try:
+            session.query(models_derived.DerivedFixtureDifficulty).delete()
+            df_converted = convert_datetime_columns(df, ["kickoff_time", "calculation_date"])
+            records = df_converted.to_dict("records")
+            session.bulk_insert_mappings(models_derived.DerivedFixtureDifficulty, records)
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    def save_derived_value_analysis(self, df: pd.DataFrame) -> None:
+        """Save derived value analysis DataFrame to database."""
+        session = self.session_factory()
+        try:
+            session.query(models_derived.DerivedValueAnalysis).delete()
+            df_converted = convert_datetime_columns(df, ["analysis_date"])
+            records = df_converted.to_dict("records")
+            session.bulk_insert_mappings(models_derived.DerivedValueAnalysis, records)
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    def save_derived_ownership_trends(self, df: pd.DataFrame) -> None:
+        """Save derived ownership trends DataFrame to database."""
+        session = self.session_factory()
+        try:
+            session.query(models_derived.DerivedOwnershipTrends).delete()
+            df_converted = convert_datetime_columns(df, ["last_updated"])
+            records = df_converted.to_dict("records")
+            session.bulk_insert_mappings(models_derived.DerivedOwnershipTrends, records)
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    def save_all_derived_data(self, derived_data: dict[str, pd.DataFrame]) -> None:
+        """Save all derived data to database in one transaction."""
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        logger.info("Saving all derived data to database...")
+
+        try:
+            # Save each derived dataset
+            if "derived_player_metrics" in derived_data and not derived_data["derived_player_metrics"].empty:
+                self.save_derived_player_metrics(derived_data["derived_player_metrics"])
+                logger.info(f"Saved {len(derived_data['derived_player_metrics'])} player metrics records")
+
+            if "derived_team_form" in derived_data and not derived_data["derived_team_form"].empty:
+                self.save_derived_team_form(derived_data["derived_team_form"])
+                logger.info(f"Saved {len(derived_data['derived_team_form'])} team form records")
+
+            if "derived_fixture_difficulty" in derived_data and not derived_data["derived_fixture_difficulty"].empty:
+                self.save_derived_fixture_difficulty(derived_data["derived_fixture_difficulty"])
+                logger.info(f"Saved {len(derived_data['derived_fixture_difficulty'])} fixture difficulty records")
+
+            if "derived_value_analysis" in derived_data and not derived_data["derived_value_analysis"].empty:
+                self.save_derived_value_analysis(derived_data["derived_value_analysis"])
+                logger.info(f"Saved {len(derived_data['derived_value_analysis'])} value analysis records")
+
+            if "derived_ownership_trends" in derived_data and not derived_data["derived_ownership_trends"].empty:
+                self.save_derived_ownership_trends(derived_data["derived_ownership_trends"])
+                logger.info(f"Saved {len(derived_data['derived_ownership_trends'])} ownership trends records")
+
+            logger.info("✅ All derived data saved successfully")
+
+        except Exception as e:
+            logger.error(f"Error saving derived data: {e}")
+            raise
+
+    # Derived data retrieval methods
+    def get_derived_player_metrics(self) -> pd.DataFrame:
+        """Get derived player metrics as DataFrame."""
+        with next(get_session()) as session:
+            query_result = session.query(models_derived.DerivedPlayerMetrics).all()
+            return model_to_dataframe(models_derived.DerivedPlayerMetrics, query_result)
+
+    def get_derived_team_form(self) -> pd.DataFrame:
+        """Get derived team form as DataFrame."""
+        with next(get_session()) as session:
+            query_result = session.query(models_derived.DerivedTeamForm).all()
+            return model_to_dataframe(models_derived.DerivedTeamForm, query_result)
+
+    def get_derived_fixture_difficulty(self, team_id: int | None = None, gameweek: int | None = None) -> pd.DataFrame:
+        """Get derived fixture difficulty as DataFrame with optional filters."""
+        with next(get_session()) as session:
+            query = session.query(models_derived.DerivedFixtureDifficulty)
+
+            if team_id is not None:
+                query = query.filter(models_derived.DerivedFixtureDifficulty.team_id == team_id)
+            if gameweek is not None:
+                query = query.filter(models_derived.DerivedFixtureDifficulty.gameweek == gameweek)
+
+            query_result = query.all()
+            return model_to_dataframe(models_derived.DerivedFixtureDifficulty, query_result)
+
+    def get_derived_value_analysis(self, position_id: int | None = None) -> pd.DataFrame:
+        """Get derived value analysis as DataFrame with optional position filter."""
+        with next(get_session()) as session:
+            query = session.query(models_derived.DerivedValueAnalysis)
+
+            if position_id is not None:
+                query = query.filter(models_derived.DerivedValueAnalysis.position_id == position_id)
+
+            query_result = query.all()
+            return model_to_dataframe(models_derived.DerivedValueAnalysis, query_result)
+
+    def get_derived_ownership_trends(self, ownership_tier: str | None = None) -> pd.DataFrame:
+        """Get derived ownership trends as DataFrame with optional tier filter."""
+        with next(get_session()) as session:
+            query = session.query(models_derived.DerivedOwnershipTrends)
+
+            if ownership_tier is not None:
+                query = query.filter(models_derived.DerivedOwnershipTrends.ownership_tier == ownership_tier)
+
+            query_result = query.all()
+            return model_to_dataframe(models_derived.DerivedOwnershipTrends, query_result)
 
 
 # Global instance for easy access

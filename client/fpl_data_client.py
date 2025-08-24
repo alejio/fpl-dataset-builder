@@ -187,6 +187,74 @@ class FPLDataClient:
         except Exception as e:
             raise RuntimeError(f"Failed to fetch league standings: {e}") from e
 
+    # ===== DERIVED ANALYTICS DATA ACCESS =====
+
+    def get_derived_player_metrics(self) -> pd.DataFrame:
+        """Get derived player analytics metrics.
+
+        Returns:
+            DataFrame with advanced player metrics including value scores,
+            form trends, expected performance, and risk analysis
+        """
+        try:
+            return db_ops.get_derived_player_metrics()
+        except Exception as e:
+            raise RuntimeError(f"Failed to fetch derived player metrics: {e}") from e
+
+    def get_derived_team_form(self) -> pd.DataFrame:
+        """Get derived team form and strength metrics.
+
+        Returns:
+            DataFrame with team performance analysis by venue
+        """
+        try:
+            return db_ops.get_derived_team_form()
+        except Exception as e:
+            raise RuntimeError(f"Failed to fetch derived team form: {e}") from e
+
+    def get_derived_fixture_difficulty(self, team_id: int | None = None, gameweek: int | None = None) -> pd.DataFrame:
+        """Get derived fixture difficulty analysis.
+
+        Args:
+            team_id: Optional team ID filter
+            gameweek: Optional gameweek filter
+
+        Returns:
+            DataFrame with multi-factor fixture difficulty analysis
+        """
+        try:
+            return db_ops.get_derived_fixture_difficulty(team_id, gameweek)
+        except Exception as e:
+            raise RuntimeError(f"Failed to fetch derived fixture difficulty: {e}") from e
+
+    def get_derived_value_analysis(self, position_id: int | None = None) -> pd.DataFrame:
+        """Get derived value analysis and recommendations.
+
+        Args:
+            position_id: Optional position filter (1=GKP, 2=DEF, 3=MID, 4=FWD)
+
+        Returns:
+            DataFrame with value analysis and investment recommendations
+        """
+        try:
+            return db_ops.get_derived_value_analysis(position_id)
+        except Exception as e:
+            raise RuntimeError(f"Failed to fetch derived value analysis: {e}") from e
+
+    def get_derived_ownership_trends(self, ownership_tier: str | None = None) -> pd.DataFrame:
+        """Get derived ownership trends and transfer momentum.
+
+        Args:
+            ownership_tier: Optional tier filter ("template", "popular", "mid_owned", "differential", "punt")
+
+        Returns:
+            DataFrame with ownership analysis and transfer momentum
+        """
+        try:
+            return db_ops.get_derived_ownership_trends(ownership_tier)
+        except Exception as e:
+            raise RuntimeError(f"Failed to fetch derived ownership trends: {e}") from e
+
 
 # Global client instance for easy access
 _client = None
@@ -269,3 +337,77 @@ def get_my_gameweek_history() -> pd.DataFrame:
 def get_league_standings(league_id: int | None = None) -> pd.DataFrame:
     """Get league standings data."""
     return _get_client().get_league_standings(league_id)
+
+
+# ===== DERIVED ANALYTICS DATA ACCESS =====
+
+
+def get_derived_player_metrics() -> pd.DataFrame:
+    """Get derived player analytics metrics.
+
+    Returns:
+        DataFrame with advanced player metrics including:
+        - Value scores and confidence ratings
+        - Form trends and momentum analysis
+        - Expected performance vs actual
+        - Set piece analysis and injury/rotation risk
+    """
+    return _get_client().get_derived_player_metrics()
+
+
+def get_derived_team_form() -> pd.DataFrame:
+    """Get derived team form and strength metrics.
+
+    Returns:
+        DataFrame with team performance analysis including:
+        - Attack/defense strength by venue
+        - Form trends and momentum
+        - Home advantage metrics
+    """
+    return _get_client().get_derived_team_form()
+
+
+def get_derived_fixture_difficulty(team_id: int | None = None, gameweek: int | None = None) -> pd.DataFrame:
+    """Get derived fixture difficulty analysis.
+
+    Args:
+        team_id: Optional team ID filter
+        gameweek: Optional gameweek filter
+
+    Returns:
+        DataFrame with multi-factor fixture difficulty including:
+        - Opponent strength and venue difficulty
+        - Expected outcomes and clean sheet probability
+        - Difficulty tiers and confidence scores
+    """
+    return _get_client().get_derived_fixture_difficulty(team_id, gameweek)
+
+
+def get_derived_value_analysis(position_id: int | None = None) -> pd.DataFrame:
+    """Get derived value analysis and recommendations.
+
+    Args:
+        position_id: Optional position filter (1=GKP, 2=DEF, 3=MID, 4=FWD)
+
+    Returns:
+        DataFrame with value analysis including:
+        - Points per pound metrics
+        - Price change predictions
+        - Buy/sell/hold ratings and recommendations
+    """
+    return _get_client().get_derived_value_analysis(position_id)
+
+
+def get_derived_ownership_trends(ownership_tier: str | None = None) -> pd.DataFrame:
+    """Get derived ownership trends and transfer momentum.
+
+    Args:
+        ownership_tier: Optional tier filter ("template", "popular", "mid_owned", "differential", "punt")
+
+    Returns:
+        DataFrame with ownership analysis including:
+        - Transfer momentum and velocity
+        - Ownership tier classification
+        - Bandwagon and crowd behavior scores
+    """
+    return _get_client().get_derived_ownership_trends(ownership_tier)

@@ -98,6 +98,18 @@ def main(
     typer.echo("✅ Raw FPL data processing completed")
     typer.echo()
 
+    # 2. Process derived analytics data from raw data
+    typer.echo("🧮 Processing derived analytics from raw data...")
+    from fetchers.derived_processor import DerivedDataProcessor
+
+    derived_processor = DerivedDataProcessor()
+    derived_data = derived_processor.process_all_derived_data()
+
+    # Save derived data to database
+    db_ops.save_all_derived_data(derived_data)
+    typer.echo("✅ Derived analytics data processed and saved")
+    typer.echo()
+
     # Additional processing (TODO: Move to raw data processors)
     if include_live:
         typer.echo("🔴 Live data processing temporarily disabled during refactoring")
@@ -109,8 +121,12 @@ def main(
 
     typer.echo("\n🎉 FPL Dataset Builder completed successfully!")
     typer.echo("✅ Complete raw API data captured in database")
+    typer.echo("✅ Derived analytics data processed and available")
     typer.echo(
-        '💾 Access via client: uv run python -c "from client.fpl_data_client import get_raw_players_bootstrap; print(len(get_raw_players_bootstrap()))"'
+        '💾 Access raw data: uv run python -c "from client.fpl_data_client import get_raw_players_bootstrap; print(len(get_raw_players_bootstrap()))"'
+    )
+    typer.echo(
+        '📊 Access derived data: uv run python -c "from db.operations import db_ops; print(len(db_ops.get_derived_player_metrics()))"'
     )
 
 
