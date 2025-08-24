@@ -291,7 +291,7 @@ class ClientLibraryTests:
         if summary:
             total = summary.get("total_tests", 0)
             successful = summary.get("successful_tests", 0)
-            failed = summary.get("failed_tests", 0)
+            # failed = summary.get("failed_tests", 0)  # Unused variable
             success_rate = summary.get("success_rate", 0)
 
             status_emoji = "✅" if summary.get("overall_status") == "PASS" else "❌"
@@ -378,7 +378,7 @@ class ClientLibraryTests:
         return "\n".join(report)
 
 
-def test_client_library() -> Dict[str, Any]:
+def test_client_library() -> dict[str, Any]:
     """Convenience function to run all client library tests."""
     test_suite = ClientLibraryTests()
     return test_suite.run_comprehensive_tests()

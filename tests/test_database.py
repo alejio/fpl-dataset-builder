@@ -5,17 +5,13 @@ import sqlite3
 import tempfile
 import time
 from datetime import datetime
-from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
-import pandas as pd
-import pytest
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from client.fpl_data_client import FPLDataClient
-from db.database import Base, create_tables, get_session
-from db.operations import db_ops
+from db.database import Base
 from migrations.manager import MigrationManager
 
 
