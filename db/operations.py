@@ -4,7 +4,7 @@ import pandas as pd
 from sqlalchemy import text
 from sqlalchemy.inspection import inspect
 
-from . import models
+from . import models, models_raw
 from .database import SessionLocal, get_session
 
 
@@ -40,6 +40,202 @@ class DatabaseOperations:
 
     def __init__(self):
         self.session_factory = SessionLocal
+
+    # Raw data operations for complete API capture
+    def save_raw_players_bootstrap(self, df: pd.DataFrame) -> None:
+        """Save raw players bootstrap DataFrame to database."""
+        session = self.session_factory()
+        try:
+            # Clear existing raw data
+            session.query(models_raw.RawPlayerBootstrap).delete()
+
+            # Convert datetime columns
+            df_converted = convert_datetime_columns(df, ["as_of_utc", "news_added"])
+
+            # Convert DataFrame to dict records and insert
+            records = df_converted.to_dict("records")
+            session.bulk_insert_mappings(models_raw.RawPlayerBootstrap, records)
+            session.commit()
+            print(f"✅ Saved {len(records)} raw players to database")
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    def get_raw_players_bootstrap(self) -> pd.DataFrame:
+        """Get raw players bootstrap as DataFrame."""
+        with next(get_session()) as session:
+            query_result = session.query(models_raw.RawPlayerBootstrap).all()
+            return model_to_dataframe(models_raw.RawPlayerBootstrap, query_result)
+
+    def save_raw_teams_bootstrap(self, df: pd.DataFrame) -> None:
+        """Save raw teams bootstrap DataFrame to database."""
+        session = self.session_factory()
+        try:
+            session.query(models_raw.RawTeamBootstrap).delete()
+            df_converted = convert_datetime_columns(df, ["as_of_utc"])
+            records = df_converted.to_dict("records")
+            session.bulk_insert_mappings(models_raw.RawTeamBootstrap, records)
+            session.commit()
+            print(f"✅ Saved {len(records)} raw teams to database")
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    def get_raw_teams_bootstrap(self) -> pd.DataFrame:
+        """Get raw teams bootstrap as DataFrame."""
+        with next(get_session()) as session:
+            query_result = session.query(models_raw.RawTeamBootstrap).all()
+            return model_to_dataframe(models_raw.RawTeamBootstrap, query_result)
+
+    def save_raw_events_bootstrap(self, df: pd.DataFrame) -> None:
+        """Save raw events bootstrap DataFrame to database."""
+        session = self.session_factory()
+        try:
+            session.query(models_raw.RawEventBootstrap).delete()
+            df_converted = convert_datetime_columns(df, ["as_of_utc", "deadline_time", "release_time"])
+            records = df_converted.to_dict("records")
+            session.bulk_insert_mappings(models_raw.RawEventBootstrap, records)
+            session.commit()
+            print(f"✅ Saved {len(records)} raw events to database")
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    def get_raw_events_bootstrap(self) -> pd.DataFrame:
+        """Get raw events bootstrap as DataFrame."""
+        with next(get_session()) as session:
+            query_result = session.query(models_raw.RawEventBootstrap).all()
+            return model_to_dataframe(models_raw.RawEventBootstrap, query_result)
+
+    def save_raw_game_settings(self, df: pd.DataFrame) -> None:
+        """Save raw game settings DataFrame to database."""
+        session = self.session_factory()
+        try:
+            session.query(models_raw.RawGameSettings).delete()
+            df_converted = convert_datetime_columns(df, ["as_of_utc"])
+            records = df_converted.to_dict("records")
+            session.bulk_insert_mappings(models_raw.RawGameSettings, records)
+            session.commit()
+            print("✅ Saved raw game settings to database")
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    def save_raw_element_stats(self, df: pd.DataFrame) -> None:
+        """Save raw element stats DataFrame to database."""
+        session = self.session_factory()
+        try:
+            session.query(models_raw.RawElementStats).delete()
+            df_converted = convert_datetime_columns(df, ["as_of_utc"])
+            records = df_converted.to_dict("records")
+            session.bulk_insert_mappings(models_raw.RawElementStats, records)
+            session.commit()
+            print(f"✅ Saved {len(records)} raw element stats to database")
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    def save_raw_element_types(self, df: pd.DataFrame) -> None:
+        """Save raw element types DataFrame to database."""
+        session = self.session_factory()
+        try:
+            session.query(models_raw.RawElementTypes).delete()
+            df_converted = convert_datetime_columns(df, ["as_of_utc"])
+            records = df_converted.to_dict("records")
+            session.bulk_insert_mappings(models_raw.RawElementTypes, records)
+            session.commit()
+            print(f"✅ Saved {len(records)} raw element types to database")
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    def save_raw_chips(self, df: pd.DataFrame) -> None:
+        """Save raw chips DataFrame to database."""
+        session = self.session_factory()
+        try:
+            session.query(models_raw.RawChips).delete()
+            df_converted = convert_datetime_columns(df, ["as_of_utc"])
+            records = df_converted.to_dict("records")
+            session.bulk_insert_mappings(models_raw.RawChips, records)
+            session.commit()
+            print(f"✅ Saved {len(records)} raw chips to database")
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    def save_raw_phases(self, df: pd.DataFrame) -> None:
+        """Save raw phases DataFrame to database."""
+        session = self.session_factory()
+        try:
+            session.query(models_raw.RawPhases).delete()
+            df_converted = convert_datetime_columns(df, ["as_of_utc"])
+            records = df_converted.to_dict("records")
+            session.bulk_insert_mappings(models_raw.RawPhases, records)
+            session.commit()
+            print(f"✅ Saved {len(records)} raw phases to database")
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    def save_raw_fixtures(self, df: pd.DataFrame) -> None:
+        """Save raw fixtures DataFrame to database."""
+        session = self.session_factory()
+        try:
+            session.query(models_raw.RawFixtures).delete()
+            df_converted = convert_datetime_columns(df, ["as_of_utc", "kickoff_utc"])
+            records = df_converted.to_dict("records")
+            session.bulk_insert_mappings(models_raw.RawFixtures, records)
+            session.commit()
+            print(f"✅ Saved {len(records)} raw fixtures to database")
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    def save_all_raw_data(self, raw_dataframes: dict[str, pd.DataFrame]) -> None:
+        """Save all raw data from bootstrap and fixtures to database."""
+        print("Saving all raw data to database...")
+
+        # Mapping of DataFrame names to save methods
+        save_methods = {
+            "raw_players_bootstrap": self.save_raw_players_bootstrap,
+            "raw_teams_bootstrap": self.save_raw_teams_bootstrap,
+            "raw_events_bootstrap": self.save_raw_events_bootstrap,
+            "raw_game_settings": self.save_raw_game_settings,
+            "raw_element_stats": self.save_raw_element_stats,
+            "raw_element_types": self.save_raw_element_types,
+            "raw_chips": self.save_raw_chips,
+            "raw_phases": self.save_raw_phases,
+            "raw_fixtures": self.save_raw_fixtures,
+        }
+
+        for df_name, df in raw_dataframes.items():
+            if df_name in save_methods and not df.empty:
+                try:
+                    save_methods[df_name](df)
+                except Exception as e:
+                    print(f"❌ Failed to save {df_name}: {str(e)[:100]}")
+            else:
+                print(f"⚠️  Skipped {df_name} (empty or no save method)")
+
+        print("✅ Raw data saving completed")
 
     def save_players_current(self, df: pd.DataFrame) -> None:
         """Save current players DataFrame to database."""

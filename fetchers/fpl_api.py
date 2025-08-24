@@ -6,7 +6,18 @@ from utils import http_get
 
 
 def fetch_fpl_bootstrap() -> dict:
-    """Fetch FPL bootstrap data and save raw JSON."""
+    """Fetch FPL bootstrap data and save raw JSON.
+
+    Returns complete bootstrap data with all API sections:
+    - elements: All player data (101 fields per player)
+    - teams: All team data (21 fields per team)
+    - events: All gameweek data (29 fields per event)
+    - game_settings: Game configuration (34 fields)
+    - element_stats: Stat definitions (26 items)
+    - element_types: Position types (4 items)
+    - chips: Available chips (8 items)
+    - phases: Season phases (11 items)
+    """
     print("Fetching FPL bootstrap data...")
     url = "https://fantasy.premierleague.com/api/bootstrap-static/"
     data = http_get(url)
@@ -16,6 +27,17 @@ def fetch_fpl_bootstrap() -> dict:
     # Save raw JSON
     with open("data/fpl_raw_bootstrap.json", "w") as f:
         json.dump(bootstrap, f, indent=2)
+
+    # Log what we captured for visibility
+    print("Bootstrap data captured:")
+    print(f"  - Players (elements): {len(bootstrap.get('elements', []))}")
+    print(f"  - Teams: {len(bootstrap.get('teams', []))}")
+    print(f"  - Events (gameweeks): {len(bootstrap.get('events', []))}")
+    print(f"  - Game settings: {'present' if 'game_settings' in bootstrap else 'missing'}")
+    print(f"  - Element stats: {len(bootstrap.get('element_stats', []))}")
+    print(f"  - Element types: {len(bootstrap.get('element_types', []))}")
+    print(f"  - Chips: {len(bootstrap.get('chips', []))}")
+    print(f"  - Phases: {len(bootstrap.get('phases', []))}")
 
     return bootstrap
 
