@@ -33,7 +33,7 @@ def main(
         False, help="Update historical datasets (match results, player rates, gameweek data)"
     ),
     include_live: bool = typer.Option(True, help="Include live gameweek data and delta calculations"),
-    # manager_id: int = typer.Option(4233026, help="FPL manager ID for league standings - TODO: Re-enable in Phase 3"),
+    # manager_id: int = typer.Option(4233026, help="FPL manager ID for league standings"),
 ):
     """Download and process complete FPL data into database with raw API capture."""
 
@@ -110,7 +110,7 @@ def main(
     typer.echo("✅ Derived analytics data processed and saved")
     typer.echo()
 
-    # Additional processing (TODO: Move to raw data processors)
+    # Additional processing
     if include_live:
         typer.echo("🔴 Live data processing temporarily disabled during refactoring")
         typer.echo("  Raw data capture is complete - live data will be added back via raw processors")
