@@ -27,56 +27,56 @@ class RawPlayersBootstrapSchema(pa.DataFrameModel):
     team: Series[int] = pa.Field(ge=1, le=20, alias="team_id")
     element_type: Series[int] = pa.Field(ge=1, le=4, alias="position_id")  # 1=GKP, 2=DEF, 3=MID, 4=FWD
     team_code: Series[int] = pa.Field(ge=1)
-    squad_number: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=1, le=99)
+    squad_number: Series[pd.Int64Dtype] = pa.Field(nullable=True)
 
     # Availability and status
     can_transact: Series[bool]
     can_select: Series[bool]
     status: Series[str] = pa.Field(isin=["a", "i", "s", "u", "d", "n"])
-    chance_of_playing_next_round: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=0, le=100)
-    chance_of_playing_this_round: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=0, le=100)
+    chance_of_playing_next_round: Series[pd.Float64Dtype] = pa.Field(nullable=True, ge=0, le=100)
+    chance_of_playing_this_round: Series[pd.Float64Dtype] = pa.Field(nullable=True, ge=0, le=100)
     news: Series[str] = pa.Field(str_length={"min_value": 0})
     news_added: Series[pd.Timestamp] = pa.Field(nullable=True)
 
     # Pricing and value
-    now_cost: Series[int] = pa.Field(ge=35, le=150)  # API stores as 10x actual price
-    cost_change_event: Series[int]
-    cost_change_event_fall: Series[int]  # Can be negative when prices fall
-    cost_change_start: Series[int]
-    cost_change_start_fall: Series[int]  # Can be negative when prices fall
+    now_cost: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=35, le=150)  # API stores as 10x actual price
+    cost_change_event: Series[pd.Int64Dtype] = pa.Field(nullable=True)
+    cost_change_event_fall: Series[pd.Int64Dtype] = pa.Field(nullable=True)  # Can be negative when prices fall
+    cost_change_start: Series[pd.Int64Dtype] = pa.Field(nullable=True)
+    cost_change_start_fall: Series[pd.Int64Dtype] = pa.Field(nullable=True)  # Can be negative when prices fall
     value_form: Series[str] = pa.Field(str_length={"min_value": 1})
     value_season: Series[str] = pa.Field(str_length={"min_value": 1})
 
     # Performance stats
-    total_points: Series[int] = pa.Field(ge=0)
-    event_points: Series[int]
+    total_points: Series[pd.Int64Dtype] = pa.Field(nullable=True)  # Can be negative for players with deductions
+    event_points: Series[pd.Int64Dtype] = pa.Field(nullable=True)
     points_per_game: Series[str] = pa.Field(str_length={"min_value": 1})
     form: Series[str] = pa.Field(str_length={"min_value": 1})
 
     # Ownership and transfers
     selected_by_percent: Series[str] = pa.Field(str_length={"min_value": 1})
-    transfers_in: Series[int] = pa.Field(ge=0)
-    transfers_out: Series[int] = pa.Field(ge=0)
-    transfers_in_event: Series[int] = pa.Field(ge=0)
-    transfers_out_event: Series[int] = pa.Field(ge=0)
+    transfers_in: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=0)
+    transfers_out: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=0)
+    transfers_in_event: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=0)
+    transfers_out_event: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=0)
 
     # Match statistics
-    minutes: Series[int] = pa.Field(ge=0)
-    starts: Series[int] = pa.Field(ge=0)
-    goals_scored: Series[int] = pa.Field(ge=0)
-    assists: Series[int] = pa.Field(ge=0)
-    clean_sheets: Series[int] = pa.Field(ge=0)
-    goals_conceded: Series[int] = pa.Field(ge=0)
-    own_goals: Series[int] = pa.Field(ge=0)
-    penalties_saved: Series[int] = pa.Field(ge=0)
-    penalties_missed: Series[int] = pa.Field(ge=0)
-    yellow_cards: Series[int] = pa.Field(ge=0)
-    red_cards: Series[int] = pa.Field(ge=0)
-    saves: Series[int] = pa.Field(ge=0)
+    minutes: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=0)
+    starts: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=0)
+    goals_scored: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=0)
+    assists: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=0)
+    clean_sheets: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=0)
+    goals_conceded: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=0)
+    own_goals: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=0)
+    penalties_saved: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=0)
+    penalties_missed: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=0)
+    yellow_cards: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=0)
+    red_cards: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=0)
+    saves: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=0)
 
     # Bonus and BPS
-    bonus: Series[int] = pa.Field(ge=0)
-    bps: Series[int] = pa.Field(ge=0)
+    bonus: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=0)
+    bps: Series[pd.Int64Dtype] = pa.Field(nullable=True)  # Can be negative for players with deductions
 
     # ICT Index components
     influence: Series[str] = pa.Field(str_length={"min_value": 1})
@@ -85,10 +85,10 @@ class RawPlayersBootstrapSchema(pa.DataFrameModel):
     ict_index: Series[str] = pa.Field(str_length={"min_value": 1})
 
     # Advanced defensive stats
-    clearances_blocks_interceptions: Series[int] = pa.Field(ge=0)
-    recoveries: Series[int] = pa.Field(ge=0)
-    tackles: Series[int] = pa.Field(ge=0)
-    defensive_contribution: Series[int] = pa.Field(ge=0)
+    clearances_blocks_interceptions: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=0)
+    recoveries: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=0)
+    tackles: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=0)
+    defensive_contribution: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=0)
 
     # Expected stats
     expected_goals: Series[str] = pa.Field(str_length={"min_value": 1})
@@ -97,29 +97,29 @@ class RawPlayersBootstrapSchema(pa.DataFrameModel):
     expected_goals_conceded: Series[str] = pa.Field(str_length={"min_value": 1})
 
     # Ranking data
-    influence_rank: Series[int] = pa.Field(ge=1)
-    influence_rank_type: Series[int] = pa.Field(ge=1)  # Actual range is 1-311 (total players)
-    creativity_rank: Series[int] = pa.Field(ge=1)
-    creativity_rank_type: Series[int] = pa.Field(ge=1)  # Actual range is 1-311 (total players)
-    threat_rank: Series[int] = pa.Field(ge=1)
-    threat_rank_type: Series[int] = pa.Field(ge=1)  # Actual range is 1-311 (total players)
-    ict_index_rank: Series[int] = pa.Field(ge=1)
-    ict_index_rank_type: Series[int] = pa.Field(ge=1)  # Actual range is 1-311 (total players)
-    now_cost_rank: Series[int] = pa.Field(ge=1)
-    now_cost_rank_type: Series[int] = pa.Field(ge=1)  # Actual range is 1-311 (total players)
-    form_rank: Series[int] = pa.Field(ge=1)
-    form_rank_type: Series[int] = pa.Field(ge=1)  # Actual range is 1-311 (total players)
-    points_per_game_rank: Series[int] = pa.Field(ge=1)
-    points_per_game_rank_type: Series[int] = pa.Field(ge=1)  # Actual range is 1-311 (total players)
-    selected_rank: Series[int] = pa.Field(ge=1)
-    selected_rank_type: Series[int] = pa.Field(ge=1)  # Actual range is 1-311 (total players)
+    influence_rank: Series[pd.Int64Dtype] = pa.Field(nullable=True)
+    influence_rank_type: Series[pd.Int64Dtype] = pa.Field(nullable=True)
+    creativity_rank: Series[pd.Int64Dtype] = pa.Field(nullable=True)
+    creativity_rank_type: Series[pd.Int64Dtype] = pa.Field(nullable=True)
+    threat_rank: Series[pd.Int64Dtype] = pa.Field(nullable=True)
+    threat_rank_type: Series[pd.Int64Dtype] = pa.Field(nullable=True)
+    ict_index_rank: Series[pd.Int64Dtype] = pa.Field(nullable=True)
+    ict_index_rank_type: Series[pd.Int64Dtype] = pa.Field(nullable=True)
+    now_cost_rank: Series[pd.Int64Dtype] = pa.Field(nullable=True)
+    now_cost_rank_type: Series[pd.Int64Dtype] = pa.Field(nullable=True)
+    form_rank: Series[pd.Int64Dtype] = pa.Field(nullable=True)
+    form_rank_type: Series[pd.Int64Dtype] = pa.Field(nullable=True)
+    points_per_game_rank: Series[pd.Int64Dtype] = pa.Field(nullable=True)
+    points_per_game_rank_type: Series[pd.Int64Dtype] = pa.Field(nullable=True)
+    selected_rank: Series[pd.Int64Dtype] = pa.Field(nullable=True)
+    selected_rank_type: Series[pd.Int64Dtype] = pa.Field(nullable=True)
 
     # Set piece responsibilities
-    corners_and_indirect_freekicks_order: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=1, le=5)
+    corners_and_indirect_freekicks_order: Series[pd.Int64Dtype] = pa.Field(nullable=True)
     corners_and_indirect_freekicks_text: Series[str] = pa.Field(str_length={"min_value": 0})
-    direct_freekicks_order: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=1, le=5)
+    direct_freekicks_order: Series[pd.Int64Dtype] = pa.Field(nullable=True)
     direct_freekicks_text: Series[str] = pa.Field(str_length={"min_value": 0})
-    penalties_order: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=1, le=5)
+    penalties_order: Series[pd.Int64Dtype] = pa.Field(nullable=True)
     penalties_text: Series[str] = pa.Field(str_length={"min_value": 0})
 
     # Per-90 minute statistics
@@ -141,9 +141,9 @@ class RawPlayersBootstrapSchema(pa.DataFrameModel):
     dreamteam_count: Series[int] = pa.Field(ge=0)
 
     # Player details
-    region: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=1)
-    team_join_date: Series[str] = pa.Field(str_length={"min_value": 8})  # YYYY-MM-DD format
-    birth_date: Series[str] = pa.Field(str_length={"min_value": 8})  # YYYY-MM-DD format
+    region: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=0)
+    team_join_date: Series[str] = pa.Field(nullable=True, str_length={"min_value": 0})  # Can be null or empty
+    birth_date: Series[str] = pa.Field(nullable=True, str_length={"min_value": 0})  # Can be null or empty
     has_temporary_code: Series[bool]
     opta_code: Series[str] = pa.Field(str_length={"min_value": 1})
 
@@ -211,9 +211,9 @@ class RawEventsBootstrapSchema(pa.DataFrameModel):
     name: Series[str] = pa.Field(str_length={"min_value": 1})
 
     # Timing
-    deadline_time: Series[pd.Timestamp]
-    deadline_time_epoch: Series[int] = pa.Field(ge=0)
-    deadline_time_game_offset: Series[int]
+    deadline_time: Series[pd.Timestamp] = pa.Field(nullable=True)
+    deadline_time_epoch: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=0)
+    deadline_time_game_offset: Series[pd.Int64Dtype] = pa.Field(nullable=True)
     release_time: Series[pd.Timestamp] = pa.Field(nullable=True)
 
     # Status flags
@@ -233,15 +233,19 @@ class RawEventsBootstrapSchema(pa.DataFrameModel):
     # Statistics
     average_entry_score: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=0)
     highest_score: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=0)
-    highest_scoring_entry: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=1)
+    highest_scoring_entry: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=0)  # Can be 0 for future gameweeks
     ranked_count: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=0)
 
     # Top performers
-    most_selected: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=1)  # Player ID
-    most_transferred_in: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=1)  # Player ID
-    top_element: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=1)  # Player ID
-    most_captained: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=1)  # Player ID
-    most_vice_captained: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=1)  # Player ID
+    most_selected: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=0)  # Player ID, can be 0 for future gameweeks
+    most_transferred_in: Series[pd.Int64Dtype] = pa.Field(
+        nullable=True, ge=0
+    )  # Player ID, can be 0 for future gameweeks
+    top_element: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=0)  # Player ID, can be 0 for future gameweeks
+    most_captained: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=0)  # Player ID, can be 0 for future gameweeks
+    most_vice_captained: Series[pd.Int64Dtype] = pa.Field(
+        nullable=True, ge=0
+    )  # Player ID, can be 0 for future gameweeks
 
     # Transfer activity
     transfers_made: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=0)
@@ -286,7 +290,7 @@ class RawGameSettingsSchema(pa.DataFrameModel):
     # Squad rules
     squad_squadplay: Series[int] = pa.Field(ge=1)
     squad_squadsize: Series[int] = pa.Field(ge=1)
-    squad_special_min: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=0)
+    squad_special_min: Series[pd.Int64Dtype] = pa.Field(nullable=True)
     squad_special_max: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=0)
     squad_team_limit: Series[int] = pa.Field(ge=1)
     squad_total_spend: Series[int] = pa.Field(ge=1)

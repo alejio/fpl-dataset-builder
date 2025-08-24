@@ -2,7 +2,7 @@
 
 import sqlite3
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any
 
 from db.database import engine
 
@@ -15,7 +15,7 @@ class DataIntegrityValidator:
         self.db_path = str(engine.url).replace("sqlite:///", "")
         self.validation_results = {}
 
-    def validate_table_relationships(self) -> Dict[str, Any]:
+    def validate_table_relationships(self) -> dict[str, Any]:
         """Validate foreign key relationships and referential integrity."""
         results = {"checks": [], "issues": [], "summary": {}}
 
@@ -87,7 +87,7 @@ class DataIntegrityValidator:
 
         return results
 
-    def validate_data_consistency(self) -> Dict[str, Any]:
+    def validate_data_consistency(self) -> dict[str, Any]:
         """Validate data consistency within and across tables."""
         results = {"checks": [], "issues": [], "summary": {}}
 
@@ -195,29 +195,29 @@ class DataIntegrityValidator:
 
         return results
 
-    def validate_schema_structure(self) -> Dict[str, Any]:
+    def validate_schema_structure(self) -> dict[str, Any]:
         """Validate database schema structure and required tables."""
         results = {"checks": [], "issues": [], "summary": {}}
 
-        # Required tables for core functionality
+        # Required tables for raw + derived architecture
         required_tables = {
-            # Raw data tables
+            # Raw data tables (complete FPL API capture)
             "raw_players_bootstrap": "Complete FPL API player data",
             "raw_teams_bootstrap": "Complete FPL API team data",
             "raw_events_bootstrap": "Complete FPL API gameweek data",
+            "raw_fixtures": "Complete FPL API fixture data",
+            "raw_game_settings": "FPL API game configuration",
+            "raw_element_stats": "FPL API stat definitions",
+            "raw_element_types": "FPL API position definitions",
+            "raw_chips": "FPL API chip information",
+            "raw_phases": "FPL API season phases",
 
-            # Legacy normalized tables
-            "players_current": "Current season player information",
-            "teams_current": "Current Premier League teams",
-            "fixtures_normalized": "Normalized fixture data",
-
-            # Derived analytics
+            # Derived analytics tables
             "derived_player_metrics": "Advanced player analytics",
             "derived_team_form": "Team performance analysis",
-
-            # Personal data
-            "fpl_my_manager": "Manager information",
-            "fpl_my_picks": "Team selections per gameweek",
+            "derived_fixture_difficulty": "Multi-factor fixture difficulty",
+            "derived_value_analysis": "Price-per-point analysis",
+            "derived_ownership_trends": "Transfer momentum analysis",
         }
 
         with sqlite3.connect(self.db_path) as conn:
@@ -298,7 +298,7 @@ class DataIntegrityValidator:
 
         return results
 
-    def run_comprehensive_validation(self) -> Dict[str, Any]:
+    def run_comprehensive_validation(self) -> dict[str, Any]:
         """Run all data integrity validations."""
         print("Running comprehensive data integrity validation...")
 
@@ -339,7 +339,7 @@ class DataIntegrityValidator:
 
         return all_results
 
-    def generate_validation_report(self, results: Dict[str, Any]) -> str:
+    def generate_validation_report(self, results: dict[str, Any]) -> str:
         """Generate a comprehensive validation report."""
         report = []
         report.append("=" * 80)
@@ -434,7 +434,7 @@ class DataIntegrityValidator:
         return "\n".join(report)
 
 
-def validate_database_integrity() -> Dict[str, Any]:
+def validate_database_integrity() -> dict[str, Any]:
     """Convenience function to run database integrity validation."""
     validator = DataIntegrityValidator()
     return validator.run_comprehensive_validation()

@@ -4,6 +4,7 @@ FPL Dataset Builder V0.1
 A minimal, synchronous script to download and normalize FPL data.
 """
 
+import pandas as pd
 import typer
 
 from db.database import initialize_database
@@ -33,7 +34,7 @@ def main(
         False, help="Update historical datasets (match results, player rates, gameweek data)"
     ),
     include_live: bool = typer.Option(True, help="Include live gameweek data and delta calculations"),
-    # manager_id: int = typer.Option(4233026, help="FPL manager ID for league standings"),
+    manager_id: int = typer.Option(4233026, help="FPL manager ID for personal data"),
 ):
     """Download and process complete FPL data into database with raw API capture."""
 
@@ -78,6 +79,27 @@ def main(
 
     # Process all raw bootstrap data
     raw_bootstrap_data = process_all_raw_bootstrap_data(bootstrap)
+
+    # 1.1. Fetch personal manager data
+    typer.echo(f"👤 Fetching personal data for manager {manager_id}...")
+    from fetchers.fpl_api import fetch_manager_team_with_budget
+    from fetchers.raw_processor import process_raw_my_manager, process_raw_my_picks
+
+    manager_data = fetch_manager_team_with_budget(manager_id)
+    if manager_data:
+        typer.echo(f"✅ Found manager: {manager_data.get('entry_name', 'Unknown')}")
+        # Process manager data
+        raw_manager_df = process_raw_my_manager(manager_data)
+        raw_picks_df = process_raw_my_picks(manager_data)
+
+        # Add to raw data
+        raw_bootstrap_data["raw_my_manager"] = raw_manager_df
+        raw_bootstrap_data["raw_my_picks"] = raw_picks_df
+    else:
+        typer.echo("⚠️ Could not fetch personal manager data")
+        # Create empty DataFrames
+        raw_bootstrap_data["raw_my_manager"] = pd.DataFrame()
+        raw_bootstrap_data["raw_my_picks"] = pd.DataFrame()
 
     # Process raw fixtures data
     raw_fixtures_data = process_raw_fixtures(fixtures_data)

@@ -123,7 +123,7 @@ class DerivedFixtureDifficultySchema(pa.DataFrameModel):
     """
 
     # Core identification
-    fixture_id: Series[int] = pa.Field(unique=True, ge=1)
+    fixture_id: Series[int] = pa.Field(ge=1)  # Not unique - each fixture has 2 rows (home/away perspectives)
     team_id: Series[int] = pa.Field(ge=1, le=20)
     opponent_id: Series[int] = pa.Field(ge=1, le=20)
     gameweek: Series[int] = pa.Field(ge=1, le=38)

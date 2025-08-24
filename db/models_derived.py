@@ -6,7 +6,7 @@ Focus on analytics-friendly structure with proper indexing and relationships.
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Float, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Float, Integer, PrimaryKeyConstraint, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .database import Base
@@ -111,8 +111,11 @@ class DerivedFixtureDifficulty(Base):
     __tablename__ = "derived_fixture_difficulty"
 
     # Primary key and identification
-    fixture_id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    fixture_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     team_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+
+    # Composite primary key for fixture_id + team_id (each fixture has 2 rows: home/away)
+    __table_args__ = (PrimaryKeyConstraint("fixture_id", "team_id"),)
     opponent_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     gameweek: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
 

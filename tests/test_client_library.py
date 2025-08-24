@@ -1,8 +1,7 @@
 """Comprehensive tests for FPL data client library functionality."""
 
-import sqlite3
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any
 
 import pandas as pd
 
@@ -65,7 +64,7 @@ class ClientLibraryTests:
             }
             return None
 
-    def test_core_data_functions(self) -> Dict[str, Any]:
+    def test_core_data_functions(self) -> dict[str, Any]:
         """Test core data retrieval functions."""
         print("Testing core data functions...")
 
@@ -103,7 +102,7 @@ class ClientLibraryTests:
         return {name: result for name, result in self.test_results.items()
                 if name in [f[0] for f in core_functions]}
 
-    def test_raw_data_functions(self) -> Dict[str, Any]:
+    def test_raw_data_functions(self) -> dict[str, Any]:
         """Test raw FPL API data functions."""
         print("Testing raw data functions...")
 
@@ -135,7 +134,7 @@ class ClientLibraryTests:
         return {name: result for name, result in self.test_results.items()
                 if name in [f[0] for f in raw_functions]}
 
-    def test_derived_analytics_functions(self) -> Dict[str, Any]:
+    def test_derived_analytics_functions(self) -> dict[str, Any]:
         """Test derived analytics functions."""
         print("Testing derived analytics functions...")
 
@@ -166,7 +165,7 @@ class ClientLibraryTests:
         return {name: result for name, result in self.test_results.items()
                 if name in [f[0] for f in derived_functions]}
 
-    def test_manager_data_functions(self) -> Dict[str, Any]:
+    def test_manager_data_functions(self) -> dict[str, Any]:
         """Test manager-specific data functions."""
         print("Testing manager data functions...")
 
@@ -195,7 +194,7 @@ class ClientLibraryTests:
         return {name: result for name, result in self.test_results.items()
                 if name in [f[0] for f in manager_functions]}
 
-    def test_utility_functions(self) -> Dict[str, Any]:
+    def test_utility_functions(self) -> dict[str, Any]:
         """Test utility and summary functions."""
         print("Testing utility functions...")
 
@@ -212,14 +211,14 @@ class ClientLibraryTests:
 
         # Test gameweek live data
         print("  Testing get_gameweek_live_data...")
-        live_data = self.test_function("get_gameweek_live_data",
+        self.test_function("get_gameweek_live_data",
                                      lambda: self.client.get_gameweek_live_data(),
                                      should_have_data=False)
 
         return {name: result for name, result in self.test_results.items()
                 if name in ["get_database_summary", "get_gameweek_live_data"]}
 
-    def test_query_functions(self) -> Dict[str, Any]:
+    def test_query_functions(self) -> dict[str, Any]:
         """Test advanced query functions if they exist."""
         print("Testing query helper functions...")
 
@@ -242,7 +241,7 @@ class ClientLibraryTests:
         return {name: result for name, result in self.test_results.items()
                 if name in [f[0] for f in query_functions]}
 
-    def run_comprehensive_tests(self) -> Dict[str, Any]:
+    def run_comprehensive_tests(self) -> dict[str, Any]:
         """Run all client library tests."""
         print("Running comprehensive client library tests...")
 
@@ -278,7 +277,7 @@ class ClientLibraryTests:
 
         return all_results
 
-    def generate_test_report(self, results: Dict[str, Any]) -> str:
+    def generate_test_report(self, results: dict[str, Any]) -> str:
         """Generate comprehensive test report."""
         report = []
         report.append("=" * 80)

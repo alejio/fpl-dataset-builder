@@ -46,16 +46,14 @@ def process_raw_players_bootstrap(bootstrap_data: dict[str, Any]) -> pd.DataFram
     timestamp = pd.Timestamp.now(tz="UTC")
 
     for player in players:
-        # Create a copy and map key field names
+        # Create a copy and map field names for schema compatibility
         processed_player = dict(player)
 
-        # Map API field names to schema field names
-        if "id" in processed_player:
-            processed_player["player_id"] = processed_player.pop("id")
-        if "team" in processed_player:
-            processed_player["team_id"] = processed_player.pop("team")
-        if "element_type" in processed_player:
-            processed_player["position_id"] = processed_player.pop("element_type")
+        # Add alias columns for schema compatibility
+        # The schema expects these alias names to be present
+        processed_player["player_id"] = processed_player["id"]
+        processed_player["team_id"] = processed_player["team"]
+        processed_player["position_id"] = processed_player["element_type"]
 
         # Add our metadata
         processed_player["as_of_utc"] = timestamp
@@ -64,6 +62,40 @@ def process_raw_players_bootstrap(bootstrap_data: dict[str, Any]) -> pd.DataFram
 
     # Convert to DataFrame
     df = pd.DataFrame(processed_players)
+
+    # Clean data before validation
+    print("🧹 Cleaning players data...")
+
+    # Handle squad_number specifically (can be None from API)
+    if "squad_number" in df.columns:
+        # Keep None values as None, don't convert to 0
+        df["squad_number"] = df["squad_number"].replace(["", "0"], None)
+        # Convert to nullable integer type, preserving None values
+        # Use astype('Int64') directly to preserve None values
+        df["squad_number"] = df["squad_number"].astype("Int64")
+
+    # Handle NaN values in numeric columns
+    numeric_columns = df.select_dtypes(include=["number"]).columns
+    for col in numeric_columns:
+        if col in df.columns:
+            if col in ["chance_of_playing_next_round", "chance_of_playing_this_round"]:
+                # These can be NaN, convert to nullable float
+                df[col] = df[col].astype("Float64")
+            else:
+                # For other numeric columns, fill NaN with 0 and convert to int
+                df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0).astype(int)
+
+    # Handle NaN values in string columns
+    string_columns = df.select_dtypes(include=["object"]).columns
+    for col in string_columns:
+        if col in df.columns and col != "squad_number":  # Skip squad_number as it's handled above
+            df[col] = df[col].fillna("")
+
+    # Handle datetime columns
+    datetime_columns = ["news_added", "as_of_utc"]
+    for col in datetime_columns:
+        if col in df.columns:
+            df[col] = pd.to_datetime(df[col], errors="coerce")
 
     # Validate with schema
     try:
@@ -91,9 +123,9 @@ def process_raw_teams_bootstrap(bootstrap_data: dict[str, Any]) -> pd.DataFrame:
     for team in teams:
         processed_team = dict(team)
 
-        # Map API field name
-        if "id" in processed_team:
-            processed_team["team_id"] = processed_team.pop("id")
+        # Add alias columns for schema compatibility
+        # The schema expects these alias names to be present
+        processed_team["team_id"] = processed_team["id"]
 
         # Handle nullable form field
         if processed_team.get("form") is None:
@@ -130,9 +162,9 @@ def process_raw_events_bootstrap(bootstrap_data: dict[str, Any]) -> pd.DataFrame
     for event in events:
         processed_event = dict(event)
 
-        # Map API field name
-        if "id" in processed_event:
-            processed_event["event_id"] = processed_event.pop("id")
+        # Add alias columns for schema compatibility
+        # The schema expects these alias names to be present
+        processed_event["event_id"] = processed_event["id"]
 
         # Convert complex nested fields to JSON strings
         for field in ["top_element_info", "chip_plays", "overrides"]:
@@ -149,6 +181,22 @@ def process_raw_events_bootstrap(bootstrap_data: dict[str, Any]) -> pd.DataFrame
         processed_events.append(processed_event)
 
     df = pd.DataFrame(processed_events)
+
+    # Clean data before validation
+    print("🧹 Cleaning events data...")
+
+    # Handle NaN values in numeric columns
+    numeric_columns = df.select_dtypes(include=["number"]).columns
+    for col in numeric_columns:
+        if col in df.columns:
+            # For events, most numeric fields can be 0 for future gameweeks
+            df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0).astype(int)
+
+    # Handle datetime columns
+    datetime_columns = ["deadline_time", "release_time", "as_of_utc"]
+    for col in datetime_columns:
+        if col in df.columns:
+            df[col] = pd.to_datetime(df[col], errors="coerce")
 
     try:
         validated_df = RawEventsBootstrapSchema.validate(df)
@@ -272,9 +320,10 @@ def process_raw_chips_bootstrap(bootstrap_data: dict[str, Any]) -> pd.DataFrame:
     for chip in chips:
         processed_chip = dict(chip)
 
-        # Map API field name
+        # Add alias columns for schema compatibility
+        # The schema expects 'id' but the model expects 'chip_id'
         if "id" in processed_chip:
-            processed_chip["chip_id"] = processed_chip.pop("id")
+            processed_chip["chip_id"] = processed_chip["id"]  # Keep both for compatibility
 
         # Convert overrides to JSON string
         if "overrides" in processed_chip:
@@ -309,9 +358,10 @@ def process_raw_phases_bootstrap(bootstrap_data: dict[str, Any]) -> pd.DataFrame
     for phase in phases:
         processed_phase = dict(phase)
 
-        # Map API field name
+        # Add alias columns for schema compatibility
+        # The schema expects 'id' but the model expects 'phase_id'
         if "id" in processed_phase:
-            processed_phase["phase_id"] = processed_phase.pop("id")
+            processed_phase["phase_id"] = processed_phase["id"]  # Keep both for compatibility
 
         processed_phase["as_of_utc"] = timestamp
         processed_phases.append(processed_phase)
@@ -408,3 +458,73 @@ def process_all_raw_bootstrap_data(bootstrap_data: dict[str, Any]) -> dict[str, 
             print(f"❌ {table_name} processing failed: {str(e)[:150]}")
 
     return raw_dataframes
+
+
+def process_raw_my_manager(manager_data: dict[str, Any]) -> pd.DataFrame:
+    """Convert raw manager data to DataFrame."""
+    print("Processing raw manager data...")
+
+    if not manager_data:
+        print("Warning: No manager data provided")
+        return pd.DataFrame()
+
+    # Map API fields to database schema
+    processed_manager = {
+        "manager_id": manager_data.get("manager_id"),
+        "entry_name": manager_data.get("entry_name", ""),
+        "player_first_name": manager_data.get("player_first_name", ""),
+        "player_last_name": manager_data.get("player_last_name", ""),
+        "summary_overall_points": manager_data.get("total_points"),
+        "summary_overall_rank": manager_data.get("overall_rank"),
+        "current_event": manager_data.get("current_event"),
+        "as_of_utc": pd.Timestamp.now(tz="UTC"),
+    }
+
+    df = pd.DataFrame([processed_manager])
+
+    try:
+        # For now, return unvalidated DataFrame since we don't have a schema yet
+        print(f"✅ Processed manager data with {len(df.columns)} fields")
+        return df
+    except Exception as e:
+        print(f"❌ Manager data validation failed: {str(e)[:200]}")
+        return df
+
+
+def process_raw_my_picks(manager_data: dict[str, Any]) -> pd.DataFrame:
+    """Convert raw picks data to DataFrame."""
+    print("Processing raw picks data...")
+
+    if not manager_data or "picks" not in manager_data:
+        print("Warning: No picks data provided")
+        return pd.DataFrame()
+
+    picks = manager_data.get("picks", [])
+    if not picks:
+        print("Warning: No picks found in manager data")
+        return pd.DataFrame()
+
+    processed_picks = []
+    timestamp = pd.Timestamp.now(tz="UTC")
+
+    for pick in picks:
+        processed_pick = {
+            "event": manager_data.get("current_event"),
+            "player_id": pick.get("element"),
+            "position": pick.get("position"),
+            "is_captain": pick.get("is_captain", False),
+            "is_vice_captain": pick.get("is_vice_captain", False),
+            "multiplier": pick.get("multiplier", 1),
+            "as_of_utc": timestamp,
+        }
+        processed_picks.append(processed_pick)
+
+    df = pd.DataFrame(processed_picks)
+
+    try:
+        # For now, return unvalidated DataFrame since we don't have a schema yet
+        print(f"✅ Processed {len(processed_picks)} picks")
+        return df
+    except Exception as e:
+        print(f"❌ Picks data validation failed: {str(e)[:200]}")
+        return df

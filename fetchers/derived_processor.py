@@ -119,12 +119,16 @@ class DerivedDataProcessor:
 
         # Value metrics
         players["points_per_million"] = np.where(
-            players["current_price"] > 0, players["total_points"] / players["current_price"], 0.0
+            players["current_price"] > 0,
+            np.maximum(players["total_points"], 0)
+            / players["current_price"],  # Use max(0, total_points) to avoid negative values
+            0.0,
         )
 
         players["form_per_million"] = np.where(
             (players["current_price"] > 0) & (players["form"].notna()),
-            pd.to_numeric(players["form"], errors="coerce") / players["current_price"],
+            np.maximum(pd.to_numeric(players["form"], errors="coerce"), 0)
+            / players["current_price"],  # Use max(0, form) to avoid negative values
             0.0,
         )
 
@@ -135,7 +139,9 @@ class DerivedDataProcessor:
         # Form analysis
         players["form_trend"] = self._analyze_form_trend(players)
         players["form_momentum"] = self._calculate_form_momentum(players)
-        players["recent_form_5gw"] = pd.to_numeric(players["form"], errors="coerce").fillna(0.0)
+        players["recent_form_5gw"] = np.maximum(
+            pd.to_numeric(players["form"], errors="coerce").fillna(0.0), 0.0
+        )  # Use max(0, form) to avoid negative values
         players["season_consistency"] = self._calculate_consistency(players)
 
         # Expected performance
@@ -223,17 +229,32 @@ class DerivedDataProcessor:
         teams["team_name"] = teams["name"]
         teams["team_short_name"] = teams["short_name"]
 
-        # Calculate form metrics (placeholder - would need match results for real calculation)
-        teams["overall_attack_strength"] = teams.get("strength_overall_away", 3.0) / 2.0
-        teams["overall_defense_strength"] = teams.get("strength_defence_home", 3.0) / 2.0
+        # Calculate form metrics - properly scale FPL strength values (1300+ range) to 0-5 range
+        # FPL strength values are typically 1000-1400, so we scale them to 0-5
+        strength_scale_factor = 300.0  # Scale factor to convert 1300+ range to 0-5 range
+
+        teams["overall_attack_strength"] = np.clip(
+            teams.get("strength_overall_away", 1000) / strength_scale_factor, 0.0, 5.0
+        )
+        teams["overall_defense_strength"] = np.clip(
+            teams.get("strength_defence_home", 1000) / strength_scale_factor, 0.0, 5.0
+        )
         teams["overall_form_points"] = 1.5  # Placeholder
 
-        teams["home_attack_strength"] = teams.get("strength_attack_home", 3.0) / 2.0
-        teams["home_defense_strength"] = teams.get("strength_defence_home", 3.0) / 2.0
+        teams["home_attack_strength"] = np.clip(
+            teams.get("strength_attack_home", 1000) / strength_scale_factor, 0.0, 5.0
+        )
+        teams["home_defense_strength"] = np.clip(
+            teams.get("strength_defence_home", 1000) / strength_scale_factor, 0.0, 5.0
+        )
         teams["home_form_points"] = 1.6  # Slight home advantage
 
-        teams["away_attack_strength"] = teams.get("strength_attack_away", 3.0) / 2.0
-        teams["away_defense_strength"] = teams.get("strength_defence_away", 3.0) / 2.0
+        teams["away_attack_strength"] = np.clip(
+            teams.get("strength_attack_away", 1000) / strength_scale_factor, 0.0, 5.0
+        )
+        teams["away_defense_strength"] = np.clip(
+            teams.get("strength_defence_away", 1000) / strength_scale_factor, 0.0, 5.0
+        )
         teams["away_form_points"] = 1.4  # Slight away disadvantage
 
         # Calculate venue advantage
@@ -344,9 +365,15 @@ class DerivedDataProcessor:
 
         players["current_price"] = players["now_cost"] / 10.0
 
-        # Value metrics
+        # Handle negative total points for schema compliance
+        players["total_points"] = np.maximum(players["total_points"], 0)
+
+        # Value metrics - handle negative total points
         players["points_per_pound"] = np.where(
-            players["current_price"] > 0, players["total_points"] / players["current_price"], 0.0
+            players["current_price"] > 0,
+            np.maximum(players["total_points"], 0)
+            / players["current_price"],  # Use max(0, total_points) to avoid negative values
+            0.0,
         )
 
         players["expected_points_per_pound"] = self._calculate_expected_value(players)
@@ -514,10 +541,16 @@ class DerivedDataProcessor:
     ) -> dict:
         """Calculate difficulty for a specific team's fixture."""
 
-        # Get opponent strength
+        # Get opponent strength and scale to 0-5 range (same scaling as team form)
         opponent_strength = team_strength.get(opponent_id, {})
-        opp_home_strength = opponent_strength.get("strength_overall_home", 3)
-        opp_away_strength = opponent_strength.get("strength_overall_away", 3)
+        strength_scale_factor = 300.0  # Same scaling factor as team form
+
+        opp_home_strength = np.clip(
+            opponent_strength.get("strength_overall_home", 1000) / strength_scale_factor, 0.0, 5.0
+        )
+        opp_away_strength = np.clip(
+            opponent_strength.get("strength_overall_away", 1000) / strength_scale_factor, 0.0, 5.0
+        )
 
         # Use opponent's home strength if they're at home, away strength if away
         base_difficulty = opp_home_strength if not is_home else opp_away_strength
@@ -708,7 +741,8 @@ class DerivedDataProcessor:
 
     def _calculate_expected_ppg(self, players: pd.DataFrame) -> pd.Series:
         """Calculate expected points per game."""
-        return pd.to_numeric(players.get("form", 3.0), errors="coerce").fillna(3.0)
+        form_values = pd.to_numeric(players.get("form", 3.0), errors="coerce").fillna(3.0)
+        return np.maximum(form_values, 0.0)  # Use max(0, form) to avoid negative values
 
     def _calculate_overperformance_risk(self, players: pd.DataFrame) -> pd.Series:
         """Calculate risk of performance regression."""
@@ -800,7 +834,7 @@ class DerivedDataProcessor:
     def _calculate_price_drop_risk(self, players: pd.DataFrame) -> pd.Series:
         """Calculate risk of price drop."""
         net_transfers = players.get("transfers_in_event", 0) - players.get("transfers_out_event", 0)
-        return np.maximum(-net_transfers / 100000.0, 0.0)
+        return np.clip(np.maximum(-net_transfers / 100000.0, 0.0), 0.0, 1.0)  # Clamp to 0-1 range
 
     def _calculate_performance_risk(self, players: pd.DataFrame) -> pd.Series:
         """Calculate performance risk."""

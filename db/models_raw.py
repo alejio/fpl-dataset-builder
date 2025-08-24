@@ -31,57 +31,57 @@ class RawPlayerBootstrap(Base):
     # Team and position
     team_id: Mapped[int] = mapped_column("team", Integer, index=True)
     position_id: Mapped[int] = mapped_column("element_type", Integer, index=True)  # 1=GKP, 2=DEF, 3=MID, 4=FWD
-    team_code: Mapped[int] = mapped_column(Integer)
-    squad_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    team_code: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    squad_number: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
 
     # Availability and status
     can_transact: Mapped[bool] = mapped_column(Boolean)
     can_select: Mapped[bool] = mapped_column(Boolean)
     status: Mapped[str] = mapped_column(String(1), index=True)  # a, i, s, u, d, n
-    chance_of_playing_next_round: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    chance_of_playing_this_round: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    chance_of_playing_next_round: Mapped[float | None] = mapped_column(Float, nullable=True)
+    chance_of_playing_this_round: Mapped[float | None] = mapped_column(Float, nullable=True)
     news: Mapped[str] = mapped_column(Text)
     news_added: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # Pricing and value
-    now_cost: Mapped[int] = mapped_column(Integer, index=True)  # API stores as 10x actual price
-    cost_change_event: Mapped[int] = mapped_column(Integer)
-    cost_change_event_fall: Mapped[int] = mapped_column(Integer)
-    cost_change_start: Mapped[int] = mapped_column(Integer)
-    cost_change_start_fall: Mapped[int] = mapped_column(Integer)
+    now_cost: Mapped[int | None] = mapped_column(Integer, index=True, nullable=True)  # API stores as 10x actual price
+    cost_change_event: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    cost_change_event_fall: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    cost_change_start: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    cost_change_start_fall: Mapped[int | None] = mapped_column(Integer, nullable=True)
     value_form: Mapped[str] = mapped_column(String(10))
     value_season: Mapped[str] = mapped_column(String(10))
 
     # Performance stats
-    total_points: Mapped[int] = mapped_column(Integer, index=True)
-    event_points: Mapped[int] = mapped_column(Integer)
+    total_points: Mapped[int | None] = mapped_column(Integer, index=True, nullable=True)
+    event_points: Mapped[int | None] = mapped_column(Integer, nullable=True)
     points_per_game: Mapped[str] = mapped_column(String(10))
     form: Mapped[str] = mapped_column(String(10), index=True)
 
     # Ownership and transfers
     selected_by_percent: Mapped[str] = mapped_column(String(10), index=True)
-    transfers_in: Mapped[int] = mapped_column(Integer)
-    transfers_out: Mapped[int] = mapped_column(Integer)
-    transfers_in_event: Mapped[int] = mapped_column(Integer)
-    transfers_out_event: Mapped[int] = mapped_column(Integer)
+    transfers_in: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    transfers_out: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    transfers_in_event: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    transfers_out_event: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     # Match statistics
-    minutes: Mapped[int] = mapped_column(Integer)
-    starts: Mapped[int] = mapped_column(Integer)
-    goals_scored: Mapped[int] = mapped_column(Integer, index=True)
-    assists: Mapped[int] = mapped_column(Integer, index=True)
-    clean_sheets: Mapped[int] = mapped_column(Integer)
-    goals_conceded: Mapped[int] = mapped_column(Integer)
-    own_goals: Mapped[int] = mapped_column(Integer)
-    penalties_saved: Mapped[int] = mapped_column(Integer)
-    penalties_missed: Mapped[int] = mapped_column(Integer)
-    yellow_cards: Mapped[int] = mapped_column(Integer)
-    red_cards: Mapped[int] = mapped_column(Integer)
-    saves: Mapped[int] = mapped_column(Integer)
+    minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    starts: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    goals_scored: Mapped[int | None] = mapped_column(Integer, index=True, nullable=True)
+    assists: Mapped[int | None] = mapped_column(Integer, index=True, nullable=True)
+    clean_sheets: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    goals_conceded: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    own_goals: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    penalties_saved: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    penalties_missed: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    yellow_cards: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    red_cards: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    saves: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     # Bonus and BPS
-    bonus: Mapped[int] = mapped_column(Integer, index=True)
-    bps: Mapped[int] = mapped_column(Integer)
+    bonus: Mapped[int | None] = mapped_column(Integer, index=True, nullable=True)
+    bps: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     # ICT Index components
     influence: Mapped[str] = mapped_column(String(10))
@@ -90,10 +90,10 @@ class RawPlayerBootstrap(Base):
     ict_index: Mapped[str] = mapped_column(String(10))
 
     # Advanced defensive stats
-    clearances_blocks_interceptions: Mapped[int] = mapped_column(Integer)
-    recoveries: Mapped[int] = mapped_column(Integer)
-    tackles: Mapped[int] = mapped_column(Integer)
-    defensive_contribution: Mapped[int] = mapped_column(Integer)
+    clearances_blocks_interceptions: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    recoveries: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    tackles: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    defensive_contribution: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     # Expected stats
     expected_goals: Mapped[str] = mapped_column(String(10))
@@ -102,22 +102,22 @@ class RawPlayerBootstrap(Base):
     expected_goals_conceded: Mapped[str] = mapped_column(String(10))
 
     # Ranking data
-    influence_rank: Mapped[int] = mapped_column(Integer)
-    influence_rank_type: Mapped[int] = mapped_column(Integer)
-    creativity_rank: Mapped[int] = mapped_column(Integer)
-    creativity_rank_type: Mapped[int] = mapped_column(Integer)
-    threat_rank: Mapped[int] = mapped_column(Integer)
-    threat_rank_type: Mapped[int] = mapped_column(Integer)
-    ict_index_rank: Mapped[int] = mapped_column(Integer)
-    ict_index_rank_type: Mapped[int] = mapped_column(Integer)
-    now_cost_rank: Mapped[int] = mapped_column(Integer)
-    now_cost_rank_type: Mapped[int] = mapped_column(Integer)
-    form_rank: Mapped[int] = mapped_column(Integer)
-    form_rank_type: Mapped[int] = mapped_column(Integer)
-    points_per_game_rank: Mapped[int] = mapped_column(Integer)
-    points_per_game_rank_type: Mapped[int] = mapped_column(Integer)
-    selected_rank: Mapped[int] = mapped_column(Integer)
-    selected_rank_type: Mapped[int] = mapped_column(Integer)
+    influence_rank: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    influence_rank_type: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    creativity_rank: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    creativity_rank_type: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    threat_rank: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    threat_rank_type: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    ict_index_rank: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    ict_index_rank_type: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    now_cost_rank: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    now_cost_rank_type: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    form_rank: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    form_rank_type: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    points_per_game_rank: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    points_per_game_rank_type: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    selected_rank: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    selected_rank_type: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     # Set piece responsibilities
     corners_and_indirect_freekicks_order: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -143,12 +143,12 @@ class RawPlayerBootstrap(Base):
     special: Mapped[bool] = mapped_column(Boolean)
     removed: Mapped[bool] = mapped_column(Boolean)
     in_dreamteam: Mapped[bool] = mapped_column(Boolean)
-    dreamteam_count: Mapped[int] = mapped_column(Integer)
+    dreamteam_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     # Player details
-    region: Mapped[int] = mapped_column(Integer)
-    team_join_date: Mapped[str] = mapped_column(String(10))  # YYYY-MM-DD
-    birth_date: Mapped[str] = mapped_column(String(10))  # YYYY-MM-DD
+    region: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    team_join_date: Mapped[str | None] = mapped_column(String(10), nullable=True)  # YYYY-MM-DD
+    birth_date: Mapped[str | None] = mapped_column(String(10), nullable=True)  # YYYY-MM-DD
     has_temporary_code: Mapped[bool] = mapped_column(Boolean)
     opta_code: Mapped[str] = mapped_column(String(20))
 
@@ -208,10 +208,10 @@ class RawEventBootstrap(Base):
     name: Mapped[str] = mapped_column(String(20))
 
     # Timing
-    deadline_time: Mapped[datetime] = mapped_column(DateTime, index=True)
-    deadline_time_epoch: Mapped[int] = mapped_column(Integer)
-    deadline_time_game_offset: Mapped[int] = mapped_column(Integer)
-    release_time: Mapped[datetime] = mapped_column(DateTime)
+    deadline_time: Mapped[datetime | None] = mapped_column(DateTime, index=True, nullable=True)
+    deadline_time_epoch: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    deadline_time_game_offset: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    release_time: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # Status flags
     finished: Mapped[bool] = mapped_column(Boolean, index=True)
@@ -285,8 +285,8 @@ class RawGameSettings(Base):
     # Squad rules
     squad_squadplay: Mapped[int] = mapped_column(Integer)
     squad_squadsize: Mapped[int] = mapped_column(Integer)
-    squad_special_min: Mapped[int] = mapped_column(Integer)
-    squad_special_max: Mapped[int] = mapped_column(Integer)
+    squad_special_min: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    squad_special_max: Mapped[int | None] = mapped_column(Integer, nullable=True)
     squad_team_limit: Mapped[int] = mapped_column(Integer)
     squad_total_spend: Mapped[int] = mapped_column(Integer)
 
@@ -423,6 +423,53 @@ class RawFixtures(Base):
     # Complex nested data (stored as JSON strings)
     stats: Mapped[str] = mapped_column(Text)  # Match statistics JSON
     pulse_id: Mapped[int] = mapped_column(Integer)
+
+    # Metadata - our addition
+    as_of_utc: Mapped[datetime] = mapped_column(DateTime, index=True)
+
+
+class RawMyManager(Base):
+    """My personal manager information from FPL API.
+
+    Single row table containing personal manager data.
+    """
+
+    __tablename__ = "raw_my_manager"
+
+    # Primary key
+    manager_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+
+    # Manager details
+    entry_name: Mapped[str] = mapped_column(String(100))
+    player_first_name: Mapped[str] = mapped_column(String(50))
+    player_last_name: Mapped[str] = mapped_column(String(50))
+
+    # Performance summary
+    summary_overall_points: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    summary_overall_rank: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    current_event: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # Metadata - our addition
+    as_of_utc: Mapped[datetime] = mapped_column(DateTime, index=True)
+
+
+class RawMyPicks(Base):
+    """My personal team selections per gameweek from FPL API."""
+
+    __tablename__ = "raw_my_picks"
+
+    # Primary key
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+
+    # Gameweek and player identification
+    event: Mapped[int | None] = mapped_column(Integer, index=True, nullable=True)
+    player_id: Mapped[int | None] = mapped_column(Integer, index=True, nullable=True)
+    position: Mapped[int | None] = mapped_column(Integer, nullable=True)  # 1-15, team position
+
+    # Captain information
+    is_captain: Mapped[bool] = mapped_column(Boolean)
+    is_vice_captain: Mapped[bool] = mapped_column(Boolean)
+    multiplier: Mapped[int] = mapped_column(Integer)  # captain=2, vice=1, others=1
 
     # Metadata - our addition
     as_of_utc: Mapped[datetime] = mapped_column(DateTime, index=True)
