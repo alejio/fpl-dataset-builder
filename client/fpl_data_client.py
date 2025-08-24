@@ -255,6 +255,312 @@ class FPLDataClient:
         except Exception as e:
             raise RuntimeError(f"Failed to fetch derived ownership trends: {e}") from e
 
+    # ===== RAW API DATA ACCESS =====
+
+    def get_raw_players_bootstrap(self) -> pd.DataFrame:
+        """Get complete raw player data from FPL bootstrap endpoint.
+
+        Returns:
+            DataFrame with all 101+ player fields exactly as provided by FPL API
+        """
+        try:
+            return db_ops.get_raw_players_bootstrap()
+        except Exception as e:
+            raise RuntimeError(f"Failed to fetch raw players bootstrap data: {e}") from e
+
+    def get_raw_teams_bootstrap(self) -> pd.DataFrame:
+        """Get complete raw team data from FPL bootstrap endpoint.
+
+        Returns:
+            DataFrame with all 21+ team fields exactly as provided by FPL API
+        """
+        try:
+            return db_ops.get_raw_teams_bootstrap()
+        except Exception as e:
+            raise RuntimeError(f"Failed to fetch raw teams bootstrap data: {e}") from e
+
+    def get_raw_events_bootstrap(self) -> pd.DataFrame:
+        """Get complete raw gameweek/event data from FPL bootstrap endpoint.
+
+        Returns:
+            DataFrame with all 29+ event fields exactly as provided by FPL API
+        """
+        try:
+            return db_ops.get_raw_events_bootstrap()
+        except Exception as e:
+            raise RuntimeError(f"Failed to fetch raw events bootstrap data: {e}") from e
+
+    def get_raw_game_settings(self) -> pd.DataFrame:
+        """Get complete raw game settings from FPL bootstrap endpoint.
+
+        Returns:
+            DataFrame with all 34+ game configuration fields exactly as provided by FPL API
+        """
+        try:
+            return db_ops.get_raw_game_settings()
+        except Exception as e:
+            raise RuntimeError(f"Failed to fetch raw game settings data: {e}") from e
+
+    def get_raw_element_stats(self) -> pd.DataFrame:
+        """Get complete raw element stat definitions from FPL bootstrap endpoint.
+
+        Returns:
+            DataFrame with all 26+ stat definitions exactly as provided by FPL API
+        """
+        try:
+            return db_ops.get_raw_element_stats()
+        except Exception as e:
+            raise RuntimeError(f"Failed to fetch raw element stats data: {e}") from e
+
+    def get_raw_element_types(self) -> pd.DataFrame:
+        """Get complete raw position types from FPL bootstrap endpoint.
+
+        Returns:
+            DataFrame with position definitions (GKP, DEF, MID, FWD) exactly as provided by FPL API
+        """
+        try:
+            return db_ops.get_raw_element_types()
+        except Exception as e:
+            raise RuntimeError(f"Failed to fetch raw element types data: {e}") from e
+
+    def get_raw_chips(self) -> pd.DataFrame:
+        """Get complete raw chip definitions from FPL bootstrap endpoint.
+
+        Returns:
+            DataFrame with chip availability and rules exactly as provided by FPL API
+        """
+        try:
+            return db_ops.get_raw_chips()
+        except Exception as e:
+            raise RuntimeError(f"Failed to fetch raw chips data: {e}") from e
+
+    def get_raw_phases(self) -> pd.DataFrame:
+        """Get complete raw season phases from FPL bootstrap endpoint.
+
+        Returns:
+            DataFrame with season phase information exactly as provided by FPL API
+        """
+        try:
+            return db_ops.get_raw_phases()
+        except Exception as e:
+            raise RuntimeError(f"Failed to fetch raw phases data: {e}") from e
+
+    def get_raw_fixtures(self) -> pd.DataFrame:
+        """Get complete raw fixture data from FPL fixtures endpoint.
+
+        Returns:
+            DataFrame with all fixture fields exactly as provided by FPL API
+        """
+        try:
+            return db_ops.get_raw_fixtures()
+        except Exception as e:
+            raise RuntimeError(f"Failed to fetch raw fixtures data: {e}") from e
+
+    # ===== QUERY HELPERS =====
+
+    def get_players_subset(
+        self, fields: list[str], position: str | None = None, team: str | None = None, max_price: float | None = None
+    ) -> pd.DataFrame:
+        """Get player data with specific field subset and optional filtering.
+
+        Args:
+            fields: List of field names to include in result
+            position: Optional position filter ("GKP", "DEF", "MID", "FWD")
+            team: Optional team short name filter (e.g., "ARS", "LIV")
+            max_price: Optional maximum price filter (in millions)
+
+        Returns:
+            DataFrame with selected fields and applied filters
+        """
+        try:
+            # Get full current players data
+            df = db_ops.get_players_current()
+
+            # Apply position filter
+            if position:
+                df = df[df["position"].str.upper() == position.upper()]
+
+            # Apply team filter
+            if team:
+                df = df[df["team_short_name"].str.upper() == team.upper()]
+
+            # Apply price filter (convert from API format: divide by 10)
+            if max_price:
+                df = df[df["now_cost"] / 10 <= max_price]
+
+            # Select only requested fields (if they exist)
+            available_fields = [f for f in fields if f in df.columns]
+            if not available_fields:
+                raise ValueError(f"None of the requested fields {fields} exist in the dataset")
+
+            return df[available_fields]
+        except Exception as e:
+            raise RuntimeError(f"Failed to get player subset: {e}") from e
+
+    def get_raw_players_subset(
+        self, fields: list[str], position_id: int | None = None, team_id: int | None = None
+    ) -> pd.DataFrame:
+        """Get raw player data with specific field subset and optional filtering.
+
+        Args:
+            fields: List of field names to include in result
+            position_id: Optional position ID filter (1=GKP, 2=DEF, 3=MID, 4=FWD)
+            team_id: Optional team ID filter
+
+        Returns:
+            DataFrame with selected fields and applied filters
+        """
+        try:
+            # Get full raw players data
+            df = db_ops.get_raw_players_bootstrap()
+
+            # Apply position filter
+            if position_id:
+                df = df[df["position_id"] == position_id]
+
+            # Apply team filter
+            if team_id:
+                df = df[df["team_id"] == team_id]
+
+            # Select only requested fields (if they exist)
+            available_fields = [f for f in fields if f in df.columns]
+            if not available_fields:
+                raise ValueError(f"None of the requested fields {fields} exist in the raw dataset")
+
+            return df[available_fields]
+        except Exception as e:
+            raise RuntimeError(f"Failed to get raw player subset: {e}") from e
+
+    def get_fixtures_by_team(
+        self, team_id: int | None = None, team_name: str | None = None, upcoming_only: bool = True
+    ) -> pd.DataFrame:
+        """Get fixtures filtered by team with optional date filtering.
+
+        Args:
+            team_id: Optional team ID filter
+            team_name: Optional team name filter (case insensitive)
+            upcoming_only: If True, only return fixtures after current date
+
+        Returns:
+            DataFrame with filtered fixtures
+        """
+        try:
+            df = db_ops.get_fixtures_normalized()
+
+            if df.empty:
+                return df
+
+            # Apply team filters
+            if team_id:
+                df = df[(df["team_a"] == team_id) | (df["team_h"] == team_id)]
+            elif team_name:
+                # First get team mapping for name lookup
+                teams_df = db_ops.get_teams_current()
+                if not teams_df.empty:
+                    matching_teams = teams_df[teams_df["name"].str.contains(team_name, case=False, na=False)]
+                    if not matching_teams.empty:
+                        team_ids = matching_teams["id"].tolist()
+                        df = df[(df["team_a"].isin(team_ids)) | (df["team_h"].isin(team_ids))]
+                    else:
+                        return pd.DataFrame()  # No matching teams found
+
+            # Apply date filter for upcoming fixtures
+            if upcoming_only and "kickoff_utc" in df.columns:
+                from datetime import datetime
+
+                current_time = datetime.utcnow()
+                df["kickoff_utc"] = pd.to_datetime(df["kickoff_utc"])
+                df = df[df["kickoff_utc"] > current_time]
+
+            return df.sort_values("kickoff_utc") if "kickoff_utc" in df.columns else df
+        except Exception as e:
+            raise RuntimeError(f"Failed to get fixtures by team: {e}") from e
+
+    def get_player_gameweek_history(
+        self,
+        player_id: int | None = None,
+        player_name: str | None = None,
+        start_gw: int | None = None,
+        end_gw: int | None = None,
+    ) -> pd.DataFrame:
+        """Get player performance history with gameweek range filtering.
+
+        Args:
+            player_id: Optional player ID filter
+            player_name: Optional player name filter (case insensitive)
+            start_gw: Optional starting gameweek filter (inclusive)
+            end_gw: Optional ending gameweek filter (inclusive)
+
+        Returns:
+            DataFrame with player gameweek history
+        """
+        try:
+            df = db_ops.get_gameweek_live_data()
+
+            if df.empty:
+                return df
+
+            # Apply player filters
+            if player_id:
+                df = df[df["player_id"] == player_id]
+            elif player_name:
+                # Get player name mapping
+                players_df = db_ops.get_players_current()
+                if not players_df.empty:
+                    matching_players = players_df[
+                        players_df["web_name"].str.contains(player_name, case=False, na=False)
+                    ]
+                    if not matching_players.empty:
+                        player_ids = matching_players["id"].tolist()
+                        df = df[df["player_id"].isin(player_ids)]
+                    else:
+                        return pd.DataFrame()  # No matching players found
+
+            # Apply gameweek range filters
+            if start_gw and "gameweek" in df.columns:
+                df = df[df["gameweek"] >= start_gw]
+            if end_gw and "gameweek" in df.columns:
+                df = df[df["gameweek"] <= end_gw]
+
+            return df.sort_values(["player_id", "gameweek"]) if "gameweek" in df.columns else df
+        except Exception as e:
+            raise RuntimeError(f"Failed to get player gameweek history: {e}") from e
+
+    def get_top_players_by_metric(self, metric: str, position: str | None = None, limit: int = 20) -> pd.DataFrame:
+        """Get top players by a specific metric with optional position filtering.
+
+        Args:
+            metric: Metric field name to sort by (e.g., 'total_points', 'form', 'value_score')
+            position: Optional position filter ("GKP", "DEF", "MID", "FWD")
+            limit: Number of top players to return
+
+        Returns:
+            DataFrame with top players sorted by metric
+        """
+        try:
+            # Try derived metrics first (for enhanced analytics)
+            try:
+                df = db_ops.get_derived_player_metrics()
+                if not df.empty and metric in df.columns:
+                    if position:
+                        df = df[df["position_name"].str.upper() == position.upper()]
+                    return df.nlargest(limit, metric)
+            except Exception:
+                pass  # Fall back to current players data
+
+            # Fallback to current players data
+            df = db_ops.get_players_current()
+            if df.empty or metric not in df.columns:
+                raise ValueError(f"Metric '{metric}' not found in available data")
+
+            # Apply position filter
+            if position:
+                df = df[df["position"].str.upper() == position.upper()]
+
+            return df.nlargest(limit, metric)
+        except Exception as e:
+            raise RuntimeError(f"Failed to get top players by metric: {e}") from e
+
 
 # Global client instance for easy access
 _client = None
@@ -411,3 +717,170 @@ def get_derived_ownership_trends(ownership_tier: str | None = None) -> pd.DataFr
         - Bandwagon and crowd behavior scores
     """
     return _get_client().get_derived_ownership_trends(ownership_tier)
+
+
+# ===== RAW API DATA ACCESS =====
+
+
+def get_raw_players_bootstrap() -> pd.DataFrame:
+    """Get complete raw player data from FPL bootstrap endpoint.
+
+    Returns:
+        DataFrame with all 101+ player fields exactly as provided by FPL API
+    """
+    return _get_client().get_raw_players_bootstrap()
+
+
+def get_raw_teams_bootstrap() -> pd.DataFrame:
+    """Get complete raw team data from FPL bootstrap endpoint.
+
+    Returns:
+        DataFrame with all 21+ team fields exactly as provided by FPL API
+    """
+    return _get_client().get_raw_teams_bootstrap()
+
+
+def get_raw_events_bootstrap() -> pd.DataFrame:
+    """Get complete raw gameweek/event data from FPL bootstrap endpoint.
+
+    Returns:
+        DataFrame with all 29+ event fields exactly as provided by FPL API
+    """
+    return _get_client().get_raw_events_bootstrap()
+
+
+def get_raw_game_settings() -> pd.DataFrame:
+    """Get complete raw game settings from FPL bootstrap endpoint.
+
+    Returns:
+        DataFrame with all 34+ game configuration fields exactly as provided by FPL API
+    """
+    return _get_client().get_raw_game_settings()
+
+
+def get_raw_element_stats() -> pd.DataFrame:
+    """Get complete raw element stat definitions from FPL bootstrap endpoint.
+
+    Returns:
+        DataFrame with all 26+ stat definitions exactly as provided by FPL API
+    """
+    return _get_client().get_raw_element_stats()
+
+
+def get_raw_element_types() -> pd.DataFrame:
+    """Get complete raw position types from FPL bootstrap endpoint.
+
+    Returns:
+        DataFrame with position definitions (GKP, DEF, MID, FWD) exactly as provided by FPL API
+    """
+    return _get_client().get_raw_element_types()
+
+
+def get_raw_chips() -> pd.DataFrame:
+    """Get complete raw chip definitions from FPL bootstrap endpoint.
+
+    Returns:
+        DataFrame with chip availability and rules exactly as provided by FPL API
+    """
+    return _get_client().get_raw_chips()
+
+
+def get_raw_phases() -> pd.DataFrame:
+    """Get complete raw season phases from FPL bootstrap endpoint.
+
+    Returns:
+        DataFrame with season phase information exactly as provided by FPL API
+    """
+    return _get_client().get_raw_phases()
+
+
+def get_raw_fixtures() -> pd.DataFrame:
+    """Get complete raw fixture data from FPL fixtures endpoint.
+
+    Returns:
+        DataFrame with all fixture fields exactly as provided by FPL API
+    """
+    return _get_client().get_raw_fixtures()
+
+
+# ===== QUERY HELPERS =====
+
+
+def get_players_subset(
+    fields: list[str], position: str | None = None, team: str | None = None, max_price: float | None = None
+) -> pd.DataFrame:
+    """Get player data with specific field subset and optional filtering.
+
+    Args:
+        fields: List of field names to include in result
+        position: Optional position filter ("GKP", "DEF", "MID", "FWD")
+        team: Optional team short name filter (e.g., "ARS", "LIV")
+        max_price: Optional maximum price filter (in millions)
+
+    Returns:
+        DataFrame with selected fields and applied filters
+    """
+    return _get_client().get_players_subset(fields, position, team, max_price)
+
+
+def get_raw_players_subset(
+    fields: list[str], position_id: int | None = None, team_id: int | None = None
+) -> pd.DataFrame:
+    """Get raw player data with specific field subset and optional filtering.
+
+    Args:
+        fields: List of field names to include in result
+        position_id: Optional position ID filter (1=GKP, 2=DEF, 3=MID, 4=FWD)
+        team_id: Optional team ID filter
+
+    Returns:
+        DataFrame with selected fields and applied filters
+    """
+    return _get_client().get_raw_players_subset(fields, position_id, team_id)
+
+
+def get_fixtures_by_team(
+    team_id: int | None = None, team_name: str | None = None, upcoming_only: bool = True
+) -> pd.DataFrame:
+    """Get fixtures filtered by team with optional date filtering.
+
+    Args:
+        team_id: Optional team ID filter
+        team_name: Optional team name filter (case insensitive)
+        upcoming_only: If True, only return fixtures after current date
+
+    Returns:
+        DataFrame with filtered fixtures
+    """
+    return _get_client().get_fixtures_by_team(team_id, team_name, upcoming_only)
+
+
+def get_player_gameweek_history(
+    player_id: int | None = None, player_name: str | None = None, start_gw: int | None = None, end_gw: int | None = None
+) -> pd.DataFrame:
+    """Get player performance history with gameweek range filtering.
+
+    Args:
+        player_id: Optional player ID filter
+        player_name: Optional player name filter (case insensitive)
+        start_gw: Optional starting gameweek filter (inclusive)
+        end_gw: Optional ending gameweek filter (inclusive)
+
+    Returns:
+        DataFrame with player gameweek history
+    """
+    return _get_client().get_player_gameweek_history(player_id, player_name, start_gw, end_gw)
+
+
+def get_top_players_by_metric(metric: str, position: str | None = None, limit: int = 20) -> pd.DataFrame:
+    """Get top players by a specific metric with optional position filtering.
+
+    Args:
+        metric: Metric field name to sort by (e.g., 'total_points', 'form', 'value_score')
+        position: Optional position filter ("GKP", "DEF", "MID", "FWD")
+        limit: Number of top players to return
+
+    Returns:
+        DataFrame with top players sorted by metric
+    """
+    return _get_client().get_top_players_by_metric(metric, position, limit)

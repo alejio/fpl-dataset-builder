@@ -113,6 +113,42 @@ class DatabaseOperations:
             query_result = session.query(models_raw.RawEventBootstrap).all()
             return model_to_dataframe(models_raw.RawEventBootstrap, query_result)
 
+    def get_raw_game_settings(self) -> pd.DataFrame:
+        """Get raw game settings as DataFrame."""
+        with next(get_session()) as session:
+            query_result = session.query(models_raw.RawGameSettings).all()
+            return model_to_dataframe(models_raw.RawGameSettings, query_result)
+
+    def get_raw_element_stats(self) -> pd.DataFrame:
+        """Get raw element stats as DataFrame."""
+        with next(get_session()) as session:
+            query_result = session.query(models_raw.RawElementStats).all()
+            return model_to_dataframe(models_raw.RawElementStats, query_result)
+
+    def get_raw_element_types(self) -> pd.DataFrame:
+        """Get raw element types (positions) as DataFrame."""
+        with next(get_session()) as session:
+            query_result = session.query(models_raw.RawElementTypes).all()
+            return model_to_dataframe(models_raw.RawElementTypes, query_result)
+
+    def get_raw_chips(self) -> pd.DataFrame:
+        """Get raw chips as DataFrame."""
+        with next(get_session()) as session:
+            query_result = session.query(models_raw.RawChips).all()
+            return model_to_dataframe(models_raw.RawChips, query_result)
+
+    def get_raw_phases(self) -> pd.DataFrame:
+        """Get raw phases as DataFrame."""
+        with next(get_session()) as session:
+            query_result = session.query(models_raw.RawPhases).all()
+            return model_to_dataframe(models_raw.RawPhases, query_result)
+
+    def get_raw_fixtures(self) -> pd.DataFrame:
+        """Get raw fixtures as DataFrame."""
+        with next(get_session()) as session:
+            query_result = session.query(models_raw.RawFixtures).all()
+            return model_to_dataframe(models_raw.RawFixtures, query_result)
+
     def save_raw_game_settings(self, df: pd.DataFrame) -> None:
         """Save raw game settings DataFrame to database."""
         session = self.session_factory()

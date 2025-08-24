@@ -216,6 +216,59 @@ players = client.get_current_players()
 summary = client.get_database_summary()
 ```
 
+### Phase 4 Enhanced Usage Examples
+
+**Raw API Data Access:**
+```python
+# Get complete raw data (101+ player fields)
+raw_players = get_raw_players_bootstrap()
+raw_teams = get_raw_teams_bootstrap()
+raw_events = get_raw_events_bootstrap()
+
+# Access all FPL API fields exactly as provided
+print(f"Raw player data: {len(raw_players.columns)} fields")
+```
+
+**Query Helpers for Advanced Filtering:**
+```python
+# Get specific fields with filtering
+midfielders = get_players_subset(
+    fields=['web_name', 'now_cost', 'total_points', 'form'],
+    position='MID',
+    max_price=8.5
+)
+
+# Get top performers by any metric
+top_value_players = get_top_players_by_metric(
+    metric='value_score',  # From derived analytics
+    position='FWD',
+    limit=10
+)
+
+# Get team fixtures
+arsenal_fixtures = get_fixtures_by_team(
+    team_name='Arsenal',
+    upcoming_only=True
+)
+
+# Get player history with gameweek range
+haaland_history = get_player_gameweek_history(
+    player_name='Haaland',
+    start_gw=1,
+    end_gw=10
+)
+```
+
+**Derived Analytics Access:**
+```python
+# Advanced player metrics with confidence scores
+player_metrics = get_derived_player_metrics()
+value_analysis = get_derived_value_analysis(position_id=4)  # Forwards
+team_form = get_derived_team_form()
+fixture_difficulty = get_derived_fixture_difficulty()
+ownership_trends = get_derived_ownership_trends()
+```
+
 ### Migration from CSV
 ```python
 # OLD WAY (CSV files):
@@ -229,13 +282,38 @@ teams = get_current_teams()
 ```
 
 ### Available Functions
-**Core FPL Data:**
+**Core FPL Data (Legacy/Normalized):**
 - `get_current_players()` - Current season player data with stats, prices, positions
 - `get_current_teams()` - Team reference data (IDs, names, short names)
 - `get_fixtures_normalized()` - Fixture data with team IDs and kickoff times
 - `get_player_xg_xa_rates()` - Expected goals/assists rates per 90 minutes
 - `get_gameweek_live_data(gw=None)` - Live gameweek performance data
 - `get_player_deltas_current()` - Week-over-week performance tracking
+
+**Raw FPL API Data (NEW in Phase 4):**
+- `get_raw_players_bootstrap()` - Complete raw player data (101+ fields)
+- `get_raw_teams_bootstrap()` - Complete raw team data (21+ fields)
+- `get_raw_events_bootstrap()` - Complete raw gameweek/event data (29+ fields)
+- `get_raw_game_settings()` - Complete raw game configuration (34+ fields)
+- `get_raw_element_stats()` - Complete raw stat definitions (26+ fields)
+- `get_raw_element_types()` - Complete raw position definitions (GKP/DEF/MID/FWD)
+- `get_raw_chips()` - Complete raw chip availability and rules
+- `get_raw_phases()` - Complete raw season phase information
+- `get_raw_fixtures()` - Complete raw fixture data (all fields from FPL API)
+
+**Derived Analytics Data (Phase 3):**
+- `get_derived_player_metrics()` - Advanced player analytics with value scores and risk analysis
+- `get_derived_team_form()` - Team performance analysis by venue with strength ratings
+- `get_derived_fixture_difficulty()` - Multi-factor fixture difficulty analysis
+- `get_derived_value_analysis()` - Price-per-point analysis with buy/sell/hold ratings
+- `get_derived_ownership_trends()` - Transfer momentum and ownership trend analysis
+
+**Query Helpers (NEW in Phase 4):**
+- `get_players_subset(fields, position, team, max_price)` - Get specific fields with filtering
+- `get_raw_players_subset(fields, position_id, team_id)` - Get raw data subset with filtering
+- `get_fixtures_by_team(team_id, team_name, upcoming_only)` - Team fixtures with date filtering
+- `get_player_gameweek_history(player_id, player_name, start_gw, end_gw)` - Historical performance
+- `get_top_players_by_metric(metric, position, limit)` - Top performers by any metric
 
 **Historical Data:**
 - `get_match_results_previous_season()` - Historical match results
