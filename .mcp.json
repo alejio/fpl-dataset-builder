@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "fpl_mcp": {
+      "command": "uv",
+      "args": ["run", "fpl-mcp"]
+    }
+  }
+}
