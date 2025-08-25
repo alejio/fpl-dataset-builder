@@ -528,3 +528,87 @@ def process_raw_my_picks(manager_data: dict[str, Any]) -> pd.DataFrame:
     except Exception as e:
         print(f"❌ Picks data validation failed: {str(e)[:200]}")
         return df
+
+
+def process_raw_gameweek_performance(live_data: dict[str, Any], gameweek: int) -> pd.DataFrame:
+    """Convert raw gameweek live data to DataFrame."""
+    print(f"Processing gameweek {gameweek} performance data...")
+
+    if not live_data or "elements" not in live_data:
+        print("Warning: No live data provided")
+        return pd.DataFrame()
+
+    elements = live_data.get("elements", [])
+    if not elements:
+        print("Warning: No player performance data found")
+        return pd.DataFrame()
+
+    processed_performances = []
+    timestamp = pd.Timestamp.now(tz="UTC")
+
+    for element in elements:
+        element_id = element.get("id")
+        stats = element.get("stats", {})
+        explain = element.get("explain", [])
+
+        # Get fixture info from explain data (for opponent, home/away)
+        opponent_team = None
+        was_home = None
+        if explain:
+            for fixture_data in explain:
+                # fixture can be an integer (fixture ID) or a dict
+                fixture = fixture_data.get("fixture")
+                if isinstance(fixture, dict):
+                    opponent_team = fixture.get("opponent_team")
+                    was_home = fixture.get("is_home")
+                    break
+                elif isinstance(fixture, list) and fixture:
+                    # If it's a list, take the first item
+                    first_fixture = fixture[0]
+                    if isinstance(first_fixture, dict):
+                        opponent_team = first_fixture.get("opponent_team")
+                        was_home = first_fixture.get("is_home")
+                        break
+
+        processed_performance = {
+            "player_id": element_id,
+            "gameweek": gameweek,
+            "total_points": stats.get("total_points"),
+            "minutes": stats.get("minutes"),
+            "goals_scored": stats.get("goals_scored"),
+            "assists": stats.get("assists"),
+            "clean_sheets": stats.get("clean_sheets"),
+            "goals_conceded": stats.get("goals_conceded"),
+            "own_goals": stats.get("own_goals"),
+            "penalties_saved": stats.get("penalties_saved"),
+            "penalties_missed": stats.get("penalties_missed"),
+            "yellow_cards": stats.get("yellow_cards"),
+            "red_cards": stats.get("red_cards"),
+            "saves": stats.get("saves"),
+            "bonus": stats.get("bonus"),
+            "bps": stats.get("bps"),
+            "influence": str(stats.get("influence", "")),
+            "creativity": str(stats.get("creativity", "")),
+            "threat": str(stats.get("threat", "")),
+            "ict_index": str(stats.get("ict_index", "")),
+            "expected_goals": str(stats.get("expected_goals", "")),
+            "expected_assists": str(stats.get("expected_assists", "")),
+            "expected_goal_involvements": str(stats.get("expected_goal_involvements", "")),
+            "expected_goals_conceded": str(stats.get("expected_goals_conceded", "")),
+            "team_id": None,  # Will need to get from bootstrap data
+            "opponent_team": opponent_team,
+            "was_home": was_home,
+            "value": stats.get("value"),
+            "selected": stats.get("selected"),
+            "as_of_utc": timestamp,
+        }
+        processed_performances.append(processed_performance)
+
+    df = pd.DataFrame(processed_performances)
+
+    try:
+        print(f"✅ Processed {len(processed_performances)} player performances for GW{gameweek}")
+        return df
+    except Exception as e:
+        print(f"❌ Gameweek performance validation failed: {str(e)[:200]}")
+        return df

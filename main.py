@@ -13,6 +13,7 @@ from fetchers import (
     fetch_fpl_fixtures,
     get_current_gameweek,
 )
+from fetchers.fpl_api import fetch_gameweek_live_data, fetch_manager_gameweek_picks
 from safety import create_safety_backup, validate_data_integrity
 from safety.cli import create_safety_cli
 from utils import ensure_data_dir
@@ -132,23 +133,49 @@ def main(
     typer.echo("✅ Derived analytics data processed and saved")
     typer.echo()
 
-    # Additional processing
-    if include_live:
-        typer.echo("🔴 Live data processing temporarily disabled during refactoring")
-        typer.echo("  Raw data capture is complete - live data will be added back via raw processors")
+    # 3. Process live gameweek data
+    if include_live and current_gameweek and not is_finished:
+        typer.echo(f"🔴 Fetching live data for gameweek {current_gameweek}...")
+
+        # Fetch live gameweek performance data
+        live_data = fetch_gameweek_live_data(current_gameweek)
+        if live_data:
+            from fetchers.raw_processor import process_raw_gameweek_performance
+
+            gameweek_performance_df = process_raw_gameweek_performance(live_data, current_gameweek)
+
+            if not gameweek_performance_df.empty:
+                db_ops.save_raw_player_gameweek_performance(gameweek_performance_df)
+                typer.echo(f"✅ Saved gameweek {current_gameweek} performance data")
+
+        # Fetch updated manager picks for current gameweek
+        updated_picks = fetch_manager_gameweek_picks(manager_id, current_gameweek)
+        if updated_picks:
+            from fetchers.raw_processor import process_raw_my_picks
+
+            picks_df = process_raw_my_picks({**updated_picks, "current_event": current_gameweek})
+
+            if not picks_df.empty:
+                db_ops.save_raw_my_picks(picks_df)
+                typer.echo(f"✅ Updated picks for gameweek {current_gameweek}")
+
+    elif include_live and is_finished:
+        typer.echo(f"ℹ️  Gameweek {current_gameweek} is finished - skipping live data fetch")
 
     if update_historical:
-        typer.echo("📚 Historical data processing temporarily disabled during refactoring")
-        typer.echo("  Raw data capture is complete - historical data will be added back via raw processors")
+        typer.echo("📚 Historical data processing feature available but not enabled by default")
+        typer.echo("  Use --update-historical to fetch vaastav historical data")
 
     typer.echo("\n🎉 FPL Dataset Builder completed successfully!")
     typer.echo("✅ Complete raw API data captured in database")
     typer.echo("✅ Derived analytics data processed and available")
+    if include_live and current_gameweek and not is_finished:
+        typer.echo("✅ Live gameweek data captured for historical analysis")
     typer.echo(
-        '💾 Access raw data: uv run python -c "from client.fpl_data_client import get_raw_players_bootstrap; print(len(get_raw_players_bootstrap()))"'
+        '💾 Access raw data: uv run python -c "from client.fpl_data_client import FPLDataClient; client=FPLDataClient(); print(len(client.get_raw_players_bootstrap()))"'
     )
     typer.echo(
-        '📊 Access derived data: uv run python -c "from db.operations import db_ops; print(len(db_ops.get_derived_player_metrics()))"'
+        '📊 Access gameweek data: uv run python -c "from client.fpl_data_client import FPLDataClient; client=FPLDataClient(); print(len(client.get_player_gameweek_history()))"'
     )
 
 

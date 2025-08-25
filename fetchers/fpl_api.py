@@ -110,3 +110,36 @@ def fetch_manager_team_with_budget(manager_id: int) -> dict | None:
     except Exception as e:
         print(f"Error fetching manager team details: {e}")
         return None
+
+
+def fetch_gameweek_live_data(gameweek: int) -> dict | None:
+    """Fetch live gameweek data including player performance."""
+    print(f"Fetching live data for gameweek {gameweek}...")
+
+    try:
+        url = f"https://fantasy.premierleague.com/api/event/{gameweek}/live/"
+        data = http_get(url)
+        live_data = json.loads(data)
+
+        print(f"Live data for GW{gameweek}: {len(live_data.get('elements', []))} player records")
+        return live_data
+
+    except Exception as e:
+        print(f"Error fetching gameweek {gameweek} live data: {e}")
+        return None
+
+
+def fetch_manager_gameweek_picks(manager_id: int, gameweek: int) -> dict | None:
+    """Fetch manager's picks for a specific gameweek."""
+    print(f"Fetching picks for manager {manager_id}, gameweek {gameweek}...")
+
+    try:
+        url = f"https://fantasy.premierleague.com/api/entry/{manager_id}/event/{gameweek}/picks/"
+        data = http_get(url)
+        picks_data = json.loads(data)
+
+        return picks_data
+
+    except Exception as e:
+        print(f"Error fetching manager {manager_id} picks for GW{gameweek}: {e}")
+        return None

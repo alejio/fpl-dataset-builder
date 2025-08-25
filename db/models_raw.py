@@ -473,3 +473,56 @@ class RawMyPicks(Base):
 
     # Metadata - our addition
     as_of_utc: Mapped[datetime] = mapped_column(DateTime, index=True)
+
+
+class RawPlayerGameweekPerformance(Base):
+    """Individual player performance data per gameweek from FPL API."""
+
+    __tablename__ = "raw_player_gameweek_performance"
+
+    # Primary key - composite of player and gameweek
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    player_id: Mapped[int] = mapped_column(Integer, index=True, nullable=False)
+    gameweek: Mapped[int] = mapped_column(Integer, index=True, nullable=False)
+
+    # Core performance stats
+    total_points: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    goals_scored: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    assists: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    clean_sheets: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    goals_conceded: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    own_goals: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    penalties_saved: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    penalties_missed: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    yellow_cards: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    red_cards: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    saves: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    bonus: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    bps: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # Advanced stats
+    influence: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    creativity: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    threat: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    ict_index: Mapped[str | None] = mapped_column(String(10), nullable=True)
+
+    # Expected stats
+    expected_goals: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    expected_assists: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    expected_goal_involvements: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    expected_goals_conceded: Mapped[str | None] = mapped_column(String(10), nullable=True)
+
+    # Team and position context
+    team_id: Mapped[int | None] = mapped_column(Integer, index=True, nullable=True)
+    opponent_team: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    was_home: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+
+    # Price at time of gameweek
+    value: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Price in 0.1M units
+
+    # Selection stats
+    selected: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Times selected as captain
+
+    # Metadata
+    as_of_utc: Mapped[datetime] = mapped_column(DateTime, index=True)

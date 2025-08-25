@@ -206,6 +206,77 @@ class FPLDataClient:
         except Exception as e:
             raise RuntimeError(f"Failed to fetch my current picks: {e}") from e
 
+    # Gameweek-specific data methods
+    def get_player_gameweek_history(
+        self, player_id: int = None, start_gw: int = None, end_gw: int = None
+    ) -> pd.DataFrame:
+        """Get historical gameweek performance for a player.
+
+        Args:
+            player_id: Specific player ID (optional, returns all players if None)
+            start_gw: Starting gameweek (optional)
+            end_gw: Ending gameweek (optional)
+
+        Returns:
+            DataFrame with gameweek-by-gameweek player performance
+        """
+        try:
+            # Get all gameweek performance data
+            df = db_ops.get_raw_player_gameweek_performance(player_id=player_id)
+
+            if df.empty:
+                return df
+
+            # Filter by gameweek range if specified
+            if start_gw is not None:
+                df = df[df["gameweek"] >= start_gw]
+            if end_gw is not None:
+                df = df[df["gameweek"] <= end_gw]
+
+            return df.sort_values(["player_id", "gameweek"])
+        except Exception as e:
+            raise RuntimeError(f"Failed to fetch player gameweek history: {e}") from e
+
+    def get_my_picks_history(self, start_gw: int = None, end_gw: int = None) -> pd.DataFrame:
+        """Get historical picks across gameweeks.
+
+        Args:
+            start_gw: Starting gameweek (optional)
+            end_gw: Ending gameweek (optional)
+
+        Returns:
+            DataFrame with picks history across gameweeks
+        """
+        try:
+            df = db_ops.get_raw_my_picks()
+
+            if df.empty:
+                return df
+
+            # Filter by gameweek range if specified
+            if start_gw is not None:
+                df = df[df["event"] >= start_gw]
+            if end_gw is not None:
+                df = df[df["event"] <= end_gw]
+
+            return df.sort_values(["event", "position"])
+        except Exception as e:
+            raise RuntimeError(f"Failed to fetch picks history: {e}") from e
+
+    def get_gameweek_performance(self, gameweek: int) -> pd.DataFrame:
+        """Get all player performances for a specific gameweek.
+
+        Args:
+            gameweek: Gameweek number
+
+        Returns:
+            DataFrame with all player performances for the specified gameweek
+        """
+        try:
+            return db_ops.get_raw_player_gameweek_performance(gameweek=gameweek)
+        except Exception as e:
+            raise RuntimeError(f"Failed to fetch gameweek {gameweek} performance: {e}") from e
+
     # Legacy compatibility methods (transform raw data to legacy format)
     def get_current_players(self) -> pd.DataFrame:
         """Get current season player data in legacy normalized format.

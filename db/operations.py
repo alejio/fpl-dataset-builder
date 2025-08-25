@@ -255,10 +255,18 @@ class DatabaseOperations:
             return model_to_dataframe(models_raw.RawMyManager, query_result)
 
     def save_raw_my_picks(self, df: pd.DataFrame) -> None:
-        """Save raw my picks DataFrame to database."""
+        """Save raw my picks DataFrame to database (append-only for historical tracking)."""
         session = self.session_factory()
         try:
-            session.query(models_raw.RawMyPicks).delete()
+            # Check if data already exists for this gameweek
+            if not df.empty and "event" in df.columns:
+                gameweek = df["event"].iloc[0]
+                existing = session.query(models_raw.RawMyPicks).filter(models_raw.RawMyPicks.event == gameweek).first()
+
+                # Only delete and re-insert for the specific gameweek if it already exists
+                if existing:
+                    session.query(models_raw.RawMyPicks).filter(models_raw.RawMyPicks.event == gameweek).delete()
+
             df_converted = convert_datetime_columns(df, ["as_of_utc"])
             records = df_converted.to_dict("records")
             session.bulk_insert_mappings(models_raw.RawMyPicks, records)
@@ -300,6 +308,42 @@ class DatabaseOperations:
                 )
                 return model_to_dataframe(models_raw.RawMyPicks, query_result)
             return pd.DataFrame()
+
+    def save_raw_player_gameweek_performance(self, df: pd.DataFrame) -> None:
+        """Save raw player gameweek performance DataFrame to database."""
+        session = self.session_factory()
+        try:
+            # Check if data already exists for this gameweek
+            if not df.empty and "gameweek" in df.columns:
+                gameweek = df["gameweek"].iloc[0]
+
+                # Delete existing data for this gameweek to allow updates
+                session.query(models_raw.RawPlayerGameweekPerformance).filter(
+                    models_raw.RawPlayerGameweekPerformance.gameweek == gameweek
+                ).delete()
+
+            df_converted = convert_datetime_columns(df, ["as_of_utc"])
+            records = df_converted.to_dict("records")
+            session.bulk_insert_mappings(models_raw.RawPlayerGameweekPerformance, records)
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    def get_raw_player_gameweek_performance(self, gameweek: int = None, player_id: int = None) -> pd.DataFrame:
+        """Get raw player gameweek performance data as DataFrame."""
+        with next(get_session()) as session:
+            query = session.query(models_raw.RawPlayerGameweekPerformance)
+
+            if gameweek is not None:
+                query = query.filter(models_raw.RawPlayerGameweekPerformance.gameweek == gameweek)
+            if player_id is not None:
+                query = query.filter(models_raw.RawPlayerGameweekPerformance.player_id == player_id)
+
+            query_result = query.all()
+            return model_to_dataframe(models_raw.RawPlayerGameweekPerformance, query_result)
 
     # Legacy compatibility adapter functions
     def get_players_current(self) -> pd.DataFrame:
