@@ -1,11 +1,11 @@
 # FPL Dataset Builder V0.1
 
-A clean, modular Python application that fetches and normalizes Fantasy Premier League data for modeling. Features database integration, automatic league standings tracking, client library for external projects, comprehensive data protection, and unified CLI interface.
+A clean, modular Python application that captures complete FPL API data and processes it into raw and derived analytics for modeling. Features raw-first architecture with 100% API field coverage, advanced derived analytics, comprehensive data protection, and unified CLI interface.
 
 ## Quick Start
 
 ```bash
-# Basic run with auto-detected season (saves to CSV + database)
+# Basic run with auto-detected season (saves to database)
 uv run main.py main
 
 # Run with specific seasons (uses default manager ID 4233026)
@@ -16,9 +16,6 @@ uv run main.py main --manager-id 12345
 
 # Skip backup/validation for faster development runs
 uv run main.py main --no-create-backup --no-validate-before
-
-# CSV-only mode (skip database)
-uv run main.py main --no-save-to-database
 ```
 
 ## 🛡️ Data Safety Commands
@@ -35,6 +32,8 @@ Built-in data protection with dedicated safety subcommands:
 uv run main.py safety validate           # Check data consistency
 uv run main.py safety backup             # Create manual backup
 uv run main.py safety summary            # View dataset overview
+uv run main.py safety completeness       # Check raw data completeness
+uv run main.py safety backup-db          # Backup database file
 uv run main.py safety restore file.csv   # Emergency restore
 uv run main.py safety cleanup --days 7   # Clean old backups
 ```
@@ -43,26 +42,30 @@ uv run main.py safety cleanup --days 7   # Clean old backups
 
 **Database Integration:**
 ```bash
-# Initialize database tables
-uv run python db_integration.py init
+# Database is automatically initialized on first run
+uv run main.py main
 
-# Load existing CSV files into database
-uv run python db_integration.py load
+# View database status via safety commands
+uv run main.py safety summary
 
-# View database status
-uv run python db_integration.py summary
+# Check raw data completeness
+uv run main.py safety completeness
 ```
 
 **Client Library Usage:**
 ```python
-# Drop-in replacement for CSV loading
-from fpl_dataset_builder.client import (
-    get_current_players, get_current_teams, get_league_standings
-)
+# Raw+Derived Architecture Client
+from fpl_dataset_builder.client import FPLDataClient
 
-players_df = get_current_players()  # Instead of pd.read_csv()
-teams_df = get_current_teams()
-league_standings_df = get_league_standings()  # All your league standings
+client = FPLDataClient()
+
+# Complete raw FPL API data (100+ fields per player)
+players_df = client.get_raw_players_bootstrap()
+teams_df = client.get_raw_teams_bootstrap()
+
+# Derived analytics data
+metrics_df = client.get_derived_player_metrics()
+value_df = client.get_derived_value_analysis()
 ```
 
 ## 📁 Project Structure
@@ -71,29 +74,31 @@ Clean, modular architecture with focused packages:
 
 ```
 ├── main.py              # Unified CLI entry point
-├── models.py            # Pydantic data models
 ├── utils.py             # Core utilities
-├── db_integration.py    # Database migration utilities
 ├── client/              # Database client library
 │   └── fpl_data_client.py # Clean API for external projects
 ├── db/                  # Database layer (SQLAlchemy 2.0)
 │   ├── database.py      # Database configuration
-│   ├── models.py        # SQLAlchemy models
+│   ├── models_raw.py    # Raw data SQLAlchemy models
+│   ├── models_derived.py # Derived data SQLAlchemy models
 │   └── operations.py    # CRUD operations
 ├── fetchers/            # Data fetching & processing
 │   ├── fpl_api.py       # FPL API endpoints
-│   ├── normalization.py # Data normalization
+│   ├── raw_processor.py # Raw FPL API data processing
+│   ├── derived_processor.py # Derived analytics processing
 │   ├── external.py      # External data sources
 │   ├── vaastav.py       # Historical data
-│   ├── my_manager.py    # Personal manager data
-│   └── utils.py         # Processing utilities
+│   └── live_data.py     # Live gameweek data
 ├── validation/          # Schema validation
-│   ├── schemas.py       # Pandera schemas
+│   ├── raw_schemas.py   # Raw data Pandera schemas
+│   ├── derived_schemas.py # Derived data Pandera schemas
 │   └── validators.py    # Validation logic
 ├── safety/              # Data protection
 │   ├── backup.py        # Backup operations
 │   ├── integrity.py     # Data validation
 │   └── cli.py          # Safety CLI
+├── migrations/          # Database migration utilities
+│   └── manager.py       # Migration management
 └── scripts/             # Maintenance utilities
     ├── fix_vaastav_data.py # Fix vaastav data compatibility
     └── README.md        # Script documentation
@@ -101,25 +106,30 @@ Clean, modular architecture with focused packages:
 
 ## 📊 Output Files
 
-Creates `data/` directory with CSV files, SQLite database, and automatic backups:
+Creates `data/` directory with SQLite database and automatic backups:
 
-**Core datasets (CSV + Database):**
-- `fpl_raw_bootstrap.json` - Raw FPL snapshot (players/teams/events)
-- `fpl_raw_fixtures.json` - Raw FPL fixtures data
-- `fpl_players_current.csv` - Normalized players with positions, prices, team IDs
-- `fpl_teams_current.csv` - Normalized team data with names and short codes
-- `fpl_fixtures_normalized.csv` - Normalized fixtures with kickoff times and team IDs
-- `match_results_previous_season.csv` - Premier League match results for modeling
-- `fpl_player_xg_xa_rates.csv` - xG90/xA90 rates per player (empty template)
-- `fpl_historical_gameweek_data.csv` - Gameweek points history from vaastav repo
-- `fpl_league_standings_current.csv` - Complete standings for all participating leagues
-- `injury_tracking_template.csv` - Editable template for top 40 players by price
+**Database Architecture:**
+- `fpl_data.db` - SQLite database with raw+derived architecture
 
-**Database:**
-- `fpl_data.db` - SQLite database with all CSV data + manager tracking
-- Supports personal manager data (picks, history, performance) and league standings
-- Automatically tracks ALL leagues you participate in with complete standings
-- Optimized for fast queries and external project integration
+**Raw FPL API Data (9+ tables with 100% field coverage):**
+- `raw_players_bootstrap` - Complete player data (100+ fields)
+- `raw_teams_bootstrap` - Complete team data (21+ fields)
+- `raw_events_bootstrap` - Complete gameweek/event data (29+ fields)
+- `raw_game_settings` - Complete game configuration (34+ fields)
+- `raw_element_stats`, `raw_element_types`, `raw_chips`, `raw_phases`
+- `raw_fixtures` - Complete fixture data with all FPL API fields
+- `raw_my_manager`, `raw_my_picks` - Personal manager data
+
+**Derived Analytics Data (5 tables with processed insights):**
+- `derived_player_metrics` - Advanced player analytics with value scores
+- `derived_team_form` - Team performance analysis by venue
+- `derived_fixture_difficulty` - Multi-factor difficulty analysis
+- `derived_value_analysis` - Price-per-point analysis with recommendations
+- `derived_ownership_trends` - Transfer momentum and ownership patterns
+
+**Legacy Files (JSON backups):**
+- `fpl_raw_bootstrap.json` - Raw FPL API snapshot backup
+- `fpl_raw_fixtures.json` - Raw FPL fixtures backup
 
 **Safety features:**
 - `data/backups/` - Timestamped backups of all critical files
@@ -128,9 +138,9 @@ Creates `data/` directory with CSV files, SQLite database, and automatic backups
 
 ## 📡 Data Sources
 
-- **FPL API** - Official fantasy.premierleague.com endpoints (undocumented but stable)
-- **vaastav/Fantasy-Premier-League** - Historical gameweek data and match results from GitHub
-- **Manual data entry** - Player xG/xA rates (empty template provided for population)
+- **FPL API** - Complete raw data capture from fantasy.premierleague.com endpoints
+- **Personal Manager Data** - Your FPL team picks and performance history
+- **Derived Analytics** - Advanced metrics computed from raw FPL data
 
 ## Development
 
@@ -140,16 +150,16 @@ uv run ruff check .
 uv run ruff format .
 ```
 
-## 🔧 Data Consistency Fixes Applied
+## 🔧 Raw+Derived Architecture Features
 
-This dataset has been enhanced with consistency fixes:
+This dataset provides comprehensive FPL data with advanced processing:
 
-- **✅ Player ID Consistency**: All datasets use standardized player_id (1-804)
-- **✅ Team ID Consistency**: All datasets use standardized team_id (1-20)
-- **✅ Enhanced xG/xA Data**: Includes both team abbreviations and team_id
-- **✅ Vaastav Data Compatibility**: Fixed historical data for team picker integration
+- **✅ 100% API Coverage**: Complete raw FPL data capture with all fields preserved
+- **✅ Derived Analytics**: Advanced metrics computed from raw data
+- **✅ Data Integrity**: Comprehensive validation and backup systems
+- **✅ Database Performance**: Optimized queries with automatic indexing
 
-The data is now ready for reliable joins and analysis across all files.
+The raw+derived architecture ensures both complete data preservation and advanced analytics capabilities.
 
 ### Maintenance Scripts
 
@@ -165,10 +175,9 @@ This script fixes the `vaastav_full_player_history_2024_2025.csv` file and adds 
 - **🛡️ Data Protection**: Built-in safety features with automatic backups and validation
 - **📁 Backups**: All operations create automatic backups in `data/backups/`
 - **🔍 Health Checks**: Run `uv run main.py safety validate` to check data integrity
-- **📊 Manual Data**: `fpl_player_xg_xa_rates.csv` and `injury_tracking_template.csv` are templates for manual editing
-- **🏆 League Tracking**: Automatically discovers and tracks ALL leagues you participate in with complete standings
+- **📊 Raw Data Monitoring**: Use `uv run main.py safety completeness` to check API capture completeness
 - **🔗 External APIs**: FPL endpoints are undocumented and may change without notice
-- **🏗️ Architecture**: Modular design with focused packages for maintainability
+- **🏗️ Architecture**: Raw-first design with derived analytics for comprehensive FPL analysis
 - **📈 Usage**: Designed for periodic dataset creation, not continuous pipeline operation
 
 ## Requirements
