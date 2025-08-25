@@ -90,10 +90,13 @@ Clean, modular architecture with focused packages:
 ├── validation/          # Schema validation
 │   ├── schemas.py       # Pandera schemas
 │   └── validators.py    # Validation logic
-└── safety/              # Data protection
-    ├── backup.py        # Backup operations
-    ├── integrity.py     # Data validation
-    └── cli.py          # Safety CLI
+├── safety/              # Data protection
+│   ├── backup.py        # Backup operations
+│   ├── integrity.py     # Data validation
+│   └── cli.py          # Safety CLI
+└── scripts/             # Maintenance utilities
+    ├── fix_vaastav_data.py # Fix vaastav data compatibility
+    └── README.md        # Script documentation
 ```
 
 ## 📊 Output Files
@@ -144,8 +147,18 @@ This dataset has been enhanced with consistency fixes:
 - **✅ Player ID Consistency**: All datasets use standardized player_id (1-804)
 - **✅ Team ID Consistency**: All datasets use standardized team_id (1-20)
 - **✅ Enhanced xG/xA Data**: Includes both team abbreviations and team_id
+- **✅ Vaastav Data Compatibility**: Fixed historical data for team picker integration
 
 The data is now ready for reliable joins and analysis across all files.
+
+### Maintenance Scripts
+
+**Vaastav Data Fix**: If you encounter issues with the team picker due to missing columns in historical data, run:
+```bash
+uv run python scripts/fix_vaastav_data.py
+```
+
+This script fixes the `vaastav_full_player_history_2024_2025.csv` file and adds `mapped_player_id` support to database operations. See `scripts/README.md` for details.
 
 ## 📝 Notes
 

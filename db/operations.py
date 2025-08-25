@@ -339,6 +339,7 @@ class DatabaseOperations:
                 "selected_by_percentage": pd.to_numeric(raw_players["selected_by_percent"], errors="coerce"),
                 "availability_status": raw_players["status"],
                 "as_of_utc": raw_players["as_of_utc"],
+                "mapped_player_id": raw_players["player_id"],  # For current players, mapped_id = player_id
             }
         )
 
@@ -426,7 +427,7 @@ class DatabaseOperations:
         """
         # This would require external data source or calculation from historical data
         # For now, return empty DataFrame with expected structure
-        columns = ["id", "player", "team", "team_id", "season", "xG90", "xA90", "as_of_utc"]
+        columns = ["id", "player", "team", "team_id", "season", "xG90", "xA90", "as_of_utc", "mapped_player_id"]
         return pd.DataFrame(columns=columns)
 
     def save_all_raw_data(self, raw_dataframes: dict[str, pd.DataFrame]) -> None:
