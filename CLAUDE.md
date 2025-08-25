@@ -64,6 +64,12 @@ uv run python -c "from client.fpl_data_client import FPLDataClient; client = FPL
 # Test derived data access
 uv run python -c "from client.fpl_data_client import FPLDataClient; client = FPLDataClient(); print(len(client.get_derived_player_metrics()))"
 
+# Test gameweek historical data
+uv run python -c "from client.fpl_data_client import FPLDataClient; client = FPLDataClient(); gw_data = client.get_gameweek_performance(2); print(f'GW2 data: {len(gw_data)} players')"
+
+# Test player historical performance
+uv run python -c "from client.fpl_data_client import FPLDataClient; client = FPLDataClient(); history = client.get_player_gameweek_history(player_id=1); print(f'Player 1 history: {len(history)} gameweeks')"
+
 # Check database status via safety commands
 uv run main.py safety summary
 ```
@@ -113,10 +119,12 @@ This is a synchronous Python application that captures complete FPL API data and
 
 ### Core features:
 - **Raw-First Architecture**: Complete FPL API capture with 100% field coverage
+- **Gameweek Historical Data**: Stores player performance for every gameweek for historical analysis
 - **Derived Analytics**: Advanced metrics and insights processed from raw data
 - **Database-Only Storage**: SQLite database with automatic table creation and migrations
 - **Client Library**: Clean Python API for external projects to access database data
 - **Manager Data**: Personal FPL manager tracking (picks, history, performance)
+- **Live Data Processing**: Captures in-progress gameweek data for real-time analysis
 - **Data Safety**: Automatic backups, integrity validation, safe database operations
 - **Modular Design**: Focused packages with clear responsibilities
 - **Error Handling**: Graceful failure with empty schema-compliant datasets
@@ -128,9 +136,11 @@ This is a synchronous Python application that captures complete FPL API data and
 3. Fetch raw FPL data (bootstrap-static, fixtures) from official API
 4. Process raw data into structured database tables (complete API capture)
 5. Save raw data to database with 100% field coverage
-6. Process derived analytics from raw data (advanced metrics, valuations, trends)
-7. Save derived analytics to separate database tables
-8. Database-only architecture with comprehensive indexing and client library access
+6. **Fetch live gameweek data** if current gameweek is in progress
+7. **Store gameweek-by-gameweek player performance** for historical analysis
+8. Process derived analytics from raw data (advanced metrics, valuations, trends)
+9. Save derived analytics to separate database tables
+10. Database-only architecture with comprehensive indexing and client library access
 
 ### Key dependencies:
 - **uv** - Package manager and runner
@@ -145,11 +155,12 @@ This is a synchronous Python application that captures complete FPL API data and
 ### Output structure:
 Raw+Derived database-only architecture with SQLite database at `data/fpl_data.db`:
 
-- **Raw Data**: Complete FPL API capture (9+ tables with 100% field coverage)
+- **Raw Data**: Complete FPL API capture (10+ tables with 100% field coverage)
   - `raw_players_bootstrap`, `raw_teams_bootstrap`, `raw_events_bootstrap`
   - `raw_game_settings`, `raw_element_stats`, `raw_element_types`
   - `raw_chips`, `raw_phases`, `raw_fixtures`
-  - `raw_my_manager`, `raw_my_picks` (personal manager data)
+  - `raw_my_manager`, `raw_my_picks` (historical personal manager data)
+  - `raw_player_gameweek_performance` (gameweek-by-gameweek player performance)
 - **Derived Analytics**: Advanced metrics and insights (5 tables)
   - `derived_player_metrics`, `derived_team_form`, `derived_fixture_difficulty`
   - `derived_value_analysis`, `derived_ownership_trends`
@@ -231,6 +242,141 @@ value_analysis = client.get_derived_value_analysis()
 ownership_trends = client.get_derived_ownership_trends()
 ```
 
+### Historical Analysis for Team Selection
+
+The new gameweek-by-gameweek data enables sophisticated historical analysis for better team selection decisions:
+
+**Player Form Analysis:**
+```python
+from fpl_dataset_builder.client import FPLDataClient
+client = FPLDataClient()
+
+# Analyze recent form for a specific player
+def analyze_player_form(player_id, last_n_gameweeks=5):
+    current_gw = 2  # Get from current gameweek data
+    history = client.get_player_gameweek_history(
+        player_id=player_id,
+        start_gw=max(1, current_gw - last_n_gameweeks),
+        end_gw=current_gw
+    )
+    if history.empty:
+        return {"avg_points": 0, "consistency": 0, "games_played": 0}
+
+    return {
+        "avg_points": history['total_points'].mean(),
+        "consistency": history['total_points'].std(),
+        "games_played": len(history[history['minutes'] > 0]),
+        "recent_performance": history['total_points'].tolist()
+    }
+
+# Example: Get form for all forwards
+forwards = client.get_raw_players_bootstrap()
+forwards = forwards[forwards['element_type'] == 4]  # FWD position
+for player_id in forwards['player_id'].head(5):
+    form = analyze_player_form(player_id)
+    print(f"Player {player_id}: {form}")
+```
+
+**Captain Selection Optimization:**
+```python
+# Find best captain candidates based on recent performance
+def get_best_captain_candidates(my_squad_player_ids, last_n_gws=3):
+    current_gw = 2  # Get from current gameweek data
+    candidates = []
+
+    for player_id in my_squad_player_ids:
+        history = client.get_player_gameweek_history(
+            player_id=player_id,
+            start_gw=max(1, current_gw - last_n_gws)
+        )
+
+        if not history.empty:
+            avg_points = history['total_points'].mean()
+            consistency = 1 / (history['total_points'].std() + 1)  # Higher is better
+            minutes_played = history['minutes'].sum()
+
+            captain_score = avg_points * consistency * (minutes_played / (90 * len(history)))
+            candidates.append({
+                'player_id': player_id,
+                'captain_score': captain_score,
+                'avg_points': avg_points,
+                'games_started': len(history[history['minutes'] >= 60])
+            })
+
+    return sorted(candidates, key=lambda x: x['captain_score'], reverse=True)
+
+# Example usage
+my_picks = client.get_my_current_picks()
+squad_ids = my_picks['player_id'].tolist()
+best_captains = get_best_captain_candidates(squad_ids)
+print("Top captain candidates:", best_captains[:3])
+```
+
+**Transfer Target Identification:**
+```python
+# Find consistent performers within budget
+def find_transfer_targets(position_type, max_price, min_avg_points=5, last_n_gws=4):
+    # Get all players of this position under budget
+    raw_players = client.get_raw_players_bootstrap()
+    candidates = raw_players[
+        (raw_players['element_type'] == position_type) &
+        (raw_players['now_cost'] <= max_price * 10)  # API stores prices * 10
+    ]
+
+    transfer_targets = []
+    current_gw = 2
+
+    for _, player in candidates.iterrows():
+        history = client.get_player_gameweek_history(
+            player_id=player['player_id'],
+            start_gw=max(1, current_gw - last_n_gws)
+        )
+
+        if len(history) >= 2:  # Need at least 2 gameweeks of data
+            avg_points = history['total_points'].mean()
+            minutes_reliability = history['minutes'].mean() / 90
+
+            if avg_points >= min_avg_points and minutes_reliability >= 0.7:
+                transfer_targets.append({
+                    'player_id': player['player_id'],
+                    'web_name': player['web_name'],
+                    'price': player['now_cost'] / 10,
+                    'avg_points': avg_points,
+                    'form': player['form'],
+                    'minutes_reliability': minutes_reliability
+                })
+
+    return sorted(transfer_targets, key=lambda x: x['avg_points'], reverse=True)
+
+# Example: Find midfielder targets under 8.0M
+targets = find_transfer_targets(position_type=3, max_price=8.0)
+print("Transfer targets:", targets[:5])
+```
+
+**Fixture Analysis with Historical Context:**
+```python
+# Analyze how players perform against specific opponents
+def analyze_player_vs_opponent(player_id, opponent_team_id, last_n_meetings=3):
+    # Get all gameweek performance data for this player
+    history = client.get_player_gameweek_history(player_id=player_id)
+
+    # Filter for games against this opponent
+    vs_opponent = history[history['opponent_team'] == opponent_team_id].tail(last_n_meetings)
+
+    if vs_opponent.empty:
+        return {"avg_points": 0, "games": 0}
+
+    return {
+        "avg_points": vs_opponent['total_points'].mean(),
+        "games": len(vs_opponent),
+        "home_away_split": {
+            "home": vs_opponent[vs_opponent['was_home'] == True]['total_points'].mean() if any(vs_opponent['was_home']) else 0,
+            "away": vs_opponent[vs_opponent['was_home'] == False]['total_points'].mean() if any(~vs_opponent['was_home']) else 0
+        },
+        "recent_performances": vs_opponent['total_points'].tolist()
+    }
+```
+
 ### Available Client Methods
 
 All methods are accessed through the `FPLDataClient` class:
@@ -256,6 +402,48 @@ All methods are accessed through the `FPLDataClient` class:
 **Personal Manager Data:**
 - `get_my_manager_data()` - Personal manager information (single row)
 - `get_my_current_picks()` - Current gameweek team selection
+
+**Gameweek Historical Data (NEW - for historical analysis):**
+- `get_player_gameweek_history(player_id, start_gw, end_gw)` - Historical gameweek performance for players
+- `get_my_picks_history(start_gw, end_gw)` - Historical team selections across gameweeks
+- `get_gameweek_performance(gameweek)` - All players' performance for specific gameweek
+
+### Gameweek Performance Data Schema
+
+The `raw_player_gameweek_performance` table contains the following fields for historical analysis:
+
+**Core Performance Stats:**
+- `player_id` - FPL player ID (1-705)
+- `gameweek` - Gameweek number (1-38)
+- `total_points` - Total FPL points scored in this gameweek
+- `minutes` - Minutes played (0-90+)
+- `goals_scored`, `assists` - Basic attacking stats
+- `clean_sheets`, `goals_conceded` - Defensive stats
+- `bonus`, `bps` - Bonus points and bonus point system score
+
+**Advanced Performance Stats:**
+- `influence`, `creativity`, `threat` - ICT index components
+- `ict_index` - Overall ICT index score
+- `expected_goals`, `expected_assists`, `expected_goal_involvements` - xG/xA stats
+- `expected_goals_conceded` - Defensive xG
+
+**Context Information:**
+- `team_id` - Player's team ID
+- `opponent_team` - Opponent team ID
+- `was_home` - Boolean indicating home/away fixture
+- `value` - Player's price at time of gameweek (in 0.1M units)
+
+**Usage Examples:**
+```python
+# Get all data for a specific gameweek
+gw_data = client.get_gameweek_performance(2)
+print(f"Available fields: {list(gw_data.columns)}")
+
+# Analyze player consistency over time
+player_history = client.get_player_gameweek_history(player_id=123)
+consistency = player_history['total_points'].std()
+avg_performance = player_history['total_points'].mean()
+```
 
 ### Architecture Benefits
 - **Complete API Capture**: 100% field coverage of FPL API data
