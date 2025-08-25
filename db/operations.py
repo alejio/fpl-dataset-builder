@@ -256,26 +256,25 @@ class DatabaseOperations:
 
     def save_raw_my_picks(self, df: pd.DataFrame) -> None:
         """Save raw my picks DataFrame to database (append-only for historical tracking)."""
-        session = self.session_factory()
-        try:
+        with next(get_session()) as session:
             # Check if data already exists for this gameweek
             if not df.empty and "event" in df.columns:
-                gameweek = df["event"].iloc[0]
+                gameweek = int(df["event"].iloc[0])  # Convert from numpy.int64 to Python int
                 existing = session.query(models_raw.RawMyPicks).filter(models_raw.RawMyPicks.event == gameweek).first()
 
                 # Only delete and re-insert for the specific gameweek if it already exists
                 if existing:
-                    session.query(models_raw.RawMyPicks).filter(models_raw.RawMyPicks.event == gameweek).delete()
+                    deleted_count = (
+                        session.query(models_raw.RawMyPicks).filter(models_raw.RawMyPicks.event == gameweek).delete()
+                    )
+                    # Flush the delete to ensure it's committed before insert
+                    session.flush()
+                    print(f"  🗑️ Deleted {deleted_count} existing pick records for GW{gameweek}")
 
             df_converted = convert_datetime_columns(df, ["as_of_utc"])
             records = df_converted.to_dict("records")
             session.bulk_insert_mappings(models_raw.RawMyPicks, records)
             session.commit()
-        except Exception:
-            session.rollback()
-            raise
-        finally:
-            session.close()
 
     def get_raw_my_picks(self) -> pd.DataFrame:
         """Get raw my picks data as DataFrame."""
@@ -311,26 +310,27 @@ class DatabaseOperations:
 
     def save_raw_player_gameweek_performance(self, df: pd.DataFrame) -> None:
         """Save raw player gameweek performance DataFrame to database."""
-        session = self.session_factory()
-        try:
+        with next(get_session()) as session:
             # Check if data already exists for this gameweek
             if not df.empty and "gameweek" in df.columns:
-                gameweek = df["gameweek"].iloc[0]
+                gameweek = int(df["gameweek"].iloc[0])  # Convert from numpy.int64 to Python int
 
                 # Delete existing data for this gameweek to allow updates
-                session.query(models_raw.RawPlayerGameweekPerformance).filter(
-                    models_raw.RawPlayerGameweekPerformance.gameweek == gameweek
-                ).delete()
+                deleted_count = (
+                    session.query(models_raw.RawPlayerGameweekPerformance)
+                    .filter(models_raw.RawPlayerGameweekPerformance.gameweek == gameweek)
+                    .delete()
+                )
+
+                # Flush the delete to ensure it's committed before insert
+                session.flush()
+
+                print(f"  🗑️ Deleted {deleted_count} existing records for GW{gameweek}")
 
             df_converted = convert_datetime_columns(df, ["as_of_utc"])
             records = df_converted.to_dict("records")
             session.bulk_insert_mappings(models_raw.RawPlayerGameweekPerformance, records)
             session.commit()
-        except Exception:
-            session.rollback()
-            raise
-        finally:
-            session.close()
 
     def get_raw_player_gameweek_performance(self, gameweek: int = None, player_id: int = None) -> pd.DataFrame:
         """Get raw player gameweek performance data as DataFrame."""

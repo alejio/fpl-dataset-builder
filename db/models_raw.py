@@ -7,7 +7,7 @@ everything the API provides.
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Float, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Float, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .database import Base
@@ -474,6 +474,9 @@ class RawMyPicks(Base):
     # Metadata - our addition
     as_of_utc: Mapped[datetime] = mapped_column(DateTime, index=True)
 
+    # Ensure uniqueness per player position per gameweek
+    __table_args__ = (UniqueConstraint("event", "player_id", "position", name="uq_event_player_position"),)
+
 
 class RawPlayerGameweekPerformance(Base):
     """Individual player performance data per gameweek from FPL API."""
@@ -484,6 +487,9 @@ class RawPlayerGameweekPerformance(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     player_id: Mapped[int] = mapped_column(Integer, index=True, nullable=False)
     gameweek: Mapped[int] = mapped_column(Integer, index=True, nullable=False)
+
+    # Ensure uniqueness per player per gameweek
+    __table_args__ = (UniqueConstraint("player_id", "gameweek", name="uq_player_gameweek"),)
 
     # Core performance stats
     total_points: Mapped[int | None] = mapped_column(Integer, nullable=True)

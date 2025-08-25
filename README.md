@@ -26,6 +26,7 @@ Built-in data protection with dedicated safety subcommands:
 - **Safe Writes**: Atomic operations with rollback on failure
 - **Data Validation**: Consistency checks across all datasets
 - **Integrity Verification**: Hash-based corruption detection
+- **Duplicate Prevention**: Database constraints prevent duplicate gameweek data
 
 ```bash
 # Data safety operations
@@ -36,6 +37,25 @@ uv run main.py safety completeness       # Check raw data completeness
 uv run main.py safety backup-db          # Backup database file
 uv run main.py safety restore file.csv   # Emergency restore
 uv run main.py safety cleanup --days 7   # Clean old backups
+```
+
+## 📈 Gameweek Backfill Commands
+
+Dedicated script for capturing missing historical gameweek data:
+
+```bash
+# Backfill missing gameweeks automatically
+uv run python backfill_gameweeks.py
+
+# Backfill specific gameweek or range
+uv run python backfill_gameweeks.py --gameweek 1
+uv run python backfill_gameweeks.py --start-gw 1 --end-gw 5
+
+# Dry run to preview changes
+uv run python backfill_gameweeks.py --dry-run
+
+# Force overwrite existing data
+uv run python backfill_gameweeks.py --force
 ```
 
 ## 🗄️ Database & Client Library
@@ -99,9 +119,11 @@ Clean, modular architecture with focused packages:
 │   └── cli.py          # Safety CLI
 ├── migrations/          # Database migration utilities
 │   └── manager.py       # Migration management
-└── scripts/             # Maintenance utilities
-    ├── fix_vaastav_data.py # Fix vaastav data compatibility
-    └── README.md        # Script documentation
+├── scripts/             # Maintenance utilities
+│   ├── fix_vaastav_data.py # Fix vaastav data compatibility
+│   └── README.md        # Script documentation
+├── backfill_gameweeks.py # Gameweek data backfill script
+└── alembic/             # Database migration files
 ```
 
 ## 📊 Output Files
@@ -118,7 +140,8 @@ Creates `data/` directory with SQLite database and automatic backups:
 - `raw_game_settings` - Complete game configuration (34+ fields)
 - `raw_element_stats`, `raw_element_types`, `raw_chips`, `raw_phases`
 - `raw_fixtures` - Complete fixture data with all FPL API fields
-- `raw_my_manager`, `raw_my_picks` - Personal manager data
+- `raw_my_manager`, `raw_my_picks` - Personal manager data (historical)
+- `raw_player_gameweek_performance` - Player performance per gameweek
 
 **Derived Analytics Data (5 tables with processed insights):**
 - `derived_player_metrics` - Advanced player analytics with value scores
@@ -135,6 +158,8 @@ Creates `data/` directory with SQLite database and automatic backups:
 - `data/backups/` - Timestamped backups of all critical files
 - Automatic backup before any data operations
 - Safe write operations with rollback on failure
+- Database unique constraints prevent duplicate gameweek data
+- Dedicated backfill script for missing gameweek recovery
 
 ## 📡 Data Sources
 
@@ -155,6 +180,8 @@ uv run ruff format .
 This dataset provides comprehensive FPL data with advanced processing:
 
 - **✅ 100% API Coverage**: Complete raw FPL data capture with all fields preserved
+- **✅ Gameweek Historical Data**: Player performance stored per gameweek for analysis
+- **✅ Duplicate Prevention**: Database constraints prevent duplicate gameweek records
 - **✅ Derived Analytics**: Advanced metrics computed from raw data
 - **✅ Data Integrity**: Comprehensive validation and backup systems
 - **✅ Database Performance**: Optimized queries with automatic indexing

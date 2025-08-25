@@ -56,6 +56,27 @@ uv run main.py safety restore filename.csv
 uv run main.py safety cleanup --days 7
 ```
 
+### Gameweek backfill commands
+```bash
+# Backfill all missing gameweeks up to current
+uv run python backfill_gameweeks.py
+
+# Backfill specific gameweek
+uv run python backfill_gameweeks.py --gameweek 1
+
+# Backfill range of gameweeks
+uv run python backfill_gameweeks.py --start-gw 1 --end-gw 5
+
+# Backfill with different manager ID
+uv run python backfill_gameweeks.py --manager-id 12345
+
+# Dry run to see what would be backfilled
+uv run python backfill_gameweeks.py --dry-run
+
+# Force overwrite existing gameweek data
+uv run python backfill_gameweeks.py --gameweek 2 --force
+```
+
 ### Database commands
 ```bash
 # Test raw data access
@@ -120,6 +141,8 @@ This is a synchronous Python application that captures complete FPL API data and
 ### Core features:
 - **Raw-First Architecture**: Complete FPL API capture with 100% field coverage
 - **Gameweek Historical Data**: Stores player performance for every gameweek for historical analysis
+- **Duplicate Prevention**: Database unique constraints prevent duplicate gameweek records
+- **Backfill Capability**: Dedicated script to capture missing historical gameweek data
 - **Derived Analytics**: Advanced metrics and insights processed from raw data
 - **Database-Only Storage**: SQLite database with automatic table creation and migrations
 - **Client Library**: Clean Python API for external projects to access database data
@@ -170,8 +193,10 @@ Raw+Derived database-only architecture with SQLite database at `data/fpl_data.db
 - Data integrity validation before and after operations
 - Raw data completeness monitoring and reporting
 - Database transactions with automatic rollback on errors
+- Unique constraints preventing duplicate gameweek data
 - Timestamped backup files in `data/backups/`
 - Emergency file restoration capabilities
+- Dedicated backfill script for missing gameweek recovery
 
 The application handles failures gracefully - if external data sources fail, it creates empty datasets with correct schemas rather than crashing. All datasets are validated using Pandera schemas and database transactions ensure data integrity. Raw-first architecture captures complete FPL API data, then processes derived analytics for modeling purposes.
 
