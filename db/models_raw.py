@@ -449,6 +449,13 @@ class RawMyManager(Base):
     summary_overall_rank: Mapped[int | None] = mapped_column(Integer, nullable=True)
     current_event: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
+    # Financial information
+    bank: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Bank balance in 0.1M units
+    team_value: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Team value in 0.1M units
+    total_transfers: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Total transfers made
+    transfer_cost: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Transfer cost for current GW
+    points_on_bench: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Points on bench
+
     # Metadata - our addition
     as_of_utc: Mapped[datetime] = mapped_column(DateTime, index=True)
 

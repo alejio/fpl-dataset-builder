@@ -477,6 +477,11 @@ def process_raw_my_manager(manager_data: dict[str, Any]) -> pd.DataFrame:
         "summary_overall_points": manager_data.get("total_points"),
         "summary_overall_rank": manager_data.get("overall_rank"),
         "current_event": manager_data.get("current_event"),
+        "bank": manager_data.get("bank"),
+        "team_value": manager_data.get("team_value"),
+        "total_transfers": manager_data.get("total_transfers"),
+        "transfer_cost": manager_data.get("transfer_cost"),
+        "points_on_bench": manager_data.get("points_on_bench"),
         "as_of_utc": pd.Timestamp.now(tz="UTC"),
     }
 

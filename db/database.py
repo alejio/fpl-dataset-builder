@@ -45,6 +45,9 @@ def get_session() -> Generator[Session, None, None]:
 
 def create_tables() -> None:
     """Create all tables in the database."""
+    # Import models to register them with Base.metadata
+    from . import models_derived, models_raw  # noqa: F401
+
     Base.metadata.create_all(bind=engine)
 
 
