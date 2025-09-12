@@ -28,9 +28,9 @@ class ClientLibraryTests:
 
             # Data presence check
             data_check = True
-            if should_have_data and hasattr(result, '__len__'):
+            if should_have_data and hasattr(result, "__len__"):
                 data_check = len(result) > 0
-            elif should_have_data and hasattr(result, 'empty'):
+            elif should_have_data and hasattr(result, "empty"):
                 data_check = not result.empty
 
             # DataFrame structure checks for DataFrames
@@ -41,7 +41,7 @@ class ClientLibraryTests:
                     "column_count": len(result.columns),
                     "row_count": len(result),
                     "has_index": result.index is not None,
-                    "memory_usage_mb": result.memory_usage(deep=True).sum() / 1024 / 1024
+                    "memory_usage_mb": result.memory_usage(deep=True).sum() / 1024 / 1024,
                 }
 
             self.test_results[func_name] = {
@@ -50,7 +50,7 @@ class ClientLibraryTests:
                 "data_check": data_check,
                 "structure_checks": structure_checks,
                 "result_type": str(type(result)),
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat(),
             }
 
             return result
@@ -60,7 +60,7 @@ class ClientLibraryTests:
                 "success": False,
                 "error": str(e),
                 "error_type": type(e).__name__,
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat(),
             }
             return None
 
@@ -99,8 +99,7 @@ class ClientLibraryTests:
                     if missing_columns:
                         self.test_results[func_name]["missing_columns"] = list(missing_columns)
 
-        return {name: result for name, result in self.test_results.items()
-                if name in [f[0] for f in core_functions]}
+        return {name: result for name, result in self.test_results.items() if name in [f[0] for f in core_functions]}
 
     def test_raw_data_functions(self) -> dict[str, Any]:
         """Test raw FPL API data functions."""
@@ -124,15 +123,16 @@ class ClientLibraryTests:
                 if func_name == "get_raw_players_bootstrap":
                     # Should have many columns from FPL API
                     if len(result.columns) < 50:  # FPL API has 100+ player fields
-                        self.test_results[func_name]["column_count_low"] = f"Expected 50+ columns, got {len(result.columns)}"
+                        self.test_results[func_name]["column_count_low"] = (
+                            f"Expected 50+ columns, got {len(result.columns)}"
+                        )
 
                 elif func_name == "get_raw_teams_bootstrap":
                     # Should have 20 teams
                     if len(result) > 0 and len(result) != 20:
                         self.test_results[func_name]["team_count_issue"] = f"Expected 20 teams, got {len(result)}"
 
-        return {name: result for name, result in self.test_results.items()
-                if name in [f[0] for f in raw_functions]}
+        return {name: result for name, result in self.test_results.items() if name in [f[0] for f in raw_functions]}
 
     def test_derived_analytics_functions(self) -> dict[str, Any]:
         """Test derived analytics functions."""
@@ -162,8 +162,7 @@ class ClientLibraryTests:
                     if len(result) > 20:
                         self.test_results[func_name]["too_many_teams"] = f"Got {len(result)} teams"
 
-        return {name: result for name, result in self.test_results.items()
-                if name in [f[0] for f in derived_functions]}
+        return {name: result for name, result in self.test_results.items() if name in [f[0] for f in derived_functions]}
 
     def test_manager_data_functions(self) -> dict[str, Any]:
         """Test manager-specific data functions."""
@@ -191,8 +190,7 @@ class ClientLibraryTests:
                     if len(result) > 0 and len(result) != 15:
                         self.test_results[func_name]["pick_count_issue"] = f"Expected 15 picks, got {len(result)}"
 
-        return {name: result for name, result in self.test_results.items()
-                if name in [f[0] for f in manager_functions]}
+        return {name: result for name, result in self.test_results.items() if name in [f[0] for f in manager_functions]}
 
     def test_utility_functions(self) -> dict[str, Any]:
         """Test utility and summary functions."""
@@ -211,12 +209,15 @@ class ClientLibraryTests:
 
         # Test gameweek live data
         print("  Testing get_gameweek_live_data...")
-        self.test_function("get_gameweek_live_data",
-                                     lambda: self.client.get_gameweek_live_data(),
-                                     should_have_data=False)
+        self.test_function(
+            "get_gameweek_live_data", lambda: self.client.get_gameweek_live_data(), should_have_data=False
+        )
 
-        return {name: result for name, result in self.test_results.items()
-                if name in ["get_database_summary", "get_gameweek_live_data"]}
+        return {
+            name: result
+            for name, result in self.test_results.items()
+            if name in ["get_database_summary", "get_gameweek_live_data"]
+        }
 
     def test_query_functions(self) -> dict[str, Any]:
         """Test advanced query functions if they exist."""
@@ -226,20 +227,21 @@ class ClientLibraryTests:
         query_functions = []
 
         # Check if query helper functions exist
-        if hasattr(self.client, 'get_players_subset'):
-            query_functions.append(("get_players_subset",
-                                  lambda: self.client.get_players_subset(['web_name', 'position'], position='MID')))
+        if hasattr(self.client, "get_players_subset"):
+            query_functions.append(
+                ("get_players_subset", lambda: self.client.get_players_subset(["web_name", "position"], position="MID"))
+            )
 
-        if hasattr(self.client, 'get_top_players_by_metric'):
-            query_functions.append(("get_top_players_by_metric",
-                                  lambda: self.client.get_top_players_by_metric('total_points', limit=10)))
+        if hasattr(self.client, "get_top_players_by_metric"):
+            query_functions.append(
+                ("get_top_players_by_metric", lambda: self.client.get_top_players_by_metric("total_points", limit=10))
+            )
 
         for func_name, func in query_functions:
             print(f"  Testing {func_name}...")
             self.test_function(func_name, func, should_have_data=False)
 
-        return {name: result for name, result in self.test_results.items()
-                if name in [f[0] for f in query_functions]}
+        return {name: result for name, result in self.test_results.items() if name in [f[0] for f in query_functions]}
 
     def run_comprehensive_tests(self) -> dict[str, Any]:
         """Run all client library tests."""
@@ -248,7 +250,7 @@ class ClientLibraryTests:
         all_results = {
             "test_timestamp": datetime.now().isoformat(),
             "database_path": self.db_path,
-            "client_type": str(type(self.client))
+            "client_type": str(type(self.client)),
         }
 
         # Run all test categories
@@ -269,7 +271,7 @@ class ClientLibraryTests:
             "successful_tests": successful_tests,
             "failed_tests": failed_tests,
             "success_rate": (successful_tests / total_tests) if total_tests > 0 else 0,
-            "overall_status": "PASS" if failed_tests == 0 else "FAIL"
+            "overall_status": "PASS" if failed_tests == 0 else "FAIL",
         }
 
         # Include detailed results
@@ -306,7 +308,7 @@ class ClientLibraryTests:
             ("derived_analytics_tests", "📊 Derived Analytics Functions"),
             ("manager_data_tests", "👤 Manager Data Functions"),
             ("utility_tests", "🔧 Utility Functions"),
-            ("query_tests", "🔍 Query Helper Functions")
+            ("query_tests", "🔍 Query Helper Functions"),
         ]
 
         detailed_results = results.get("detailed_results", {})
@@ -318,22 +320,25 @@ class ClientLibraryTests:
 
                 # Count successes/failures in this category
                 category_functions = list(category_data.keys())
-                category_successes = len([f for f in category_functions
-                                        if detailed_results.get(f, {}).get("success", False)])
+                category_successes = len(
+                    [f for f in category_functions if detailed_results.get(f, {}).get("success", False)]
+                )
 
                 report.append(f"   Status: {category_successes}/{len(category_functions)} functions working")
 
                 # Show failed functions
-                failed_functions = [f for f in category_functions
-                                  if not detailed_results.get(f, {}).get("success", False)]
+                failed_functions = [
+                    f for f in category_functions if not detailed_results.get(f, {}).get("success", False)
+                ]
 
                 for func in failed_functions:
                     error = detailed_results.get(func, {}).get("error", "Unknown error")
                     report.append(f"   ❌ {func}: {error[:100]}...")
 
                 # Show successful functions with details
-                successful_functions = [f for f in category_functions
-                                      if detailed_results.get(f, {}).get("success", False)]
+                successful_functions = [
+                    f for f in category_functions if detailed_results.get(f, {}).get("success", False)
+                ]
 
                 for func in successful_functions[:3]:  # Show first 3 successful
                     details = detailed_results.get(func, {})
@@ -395,10 +400,11 @@ if __name__ == "__main__":
 
     # Save detailed results
     import json
+
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     results_file = f"client_test_results_{timestamp}.json"
 
-    with open(results_file, 'w') as f:
+    with open(results_file, "w") as f:
         json.dump(results, f, indent=2, default=str)
 
     print(f"\nDetailed results saved to: {results_file}")

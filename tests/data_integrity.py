@@ -29,12 +29,14 @@ class DataIntegrityValidator:
                 """)
                 orphaned_gameweek_data = cursor.fetchone()[0]
 
-                results["checks"].append({
-                    "name": "gameweek_data_player_references",
-                    "description": "Check if gameweek data references valid players",
-                    "orphaned_records": orphaned_gameweek_data,
-                    "status": "PASS" if orphaned_gameweek_data == 0 else "FAIL"
-                })
+                results["checks"].append(
+                    {
+                        "name": "gameweek_data_player_references",
+                        "description": "Check if gameweek data references valid players",
+                        "orphaned_records": orphaned_gameweek_data,
+                        "status": "PASS" if orphaned_gameweek_data == 0 else "FAIL",
+                    }
+                )
 
                 if orphaned_gameweek_data > 0:
                     results["issues"].append(f"Found {orphaned_gameweek_data} gameweek records with invalid player_id")
@@ -47,12 +49,14 @@ class DataIntegrityValidator:
                 """)
                 orphaned_players = cursor.fetchone()[0]
 
-                results["checks"].append({
-                    "name": "player_team_references",
-                    "description": "Check if players reference valid teams",
-                    "orphaned_records": orphaned_players,
-                    "status": "PASS" if orphaned_players == 0 else "FAIL"
-                })
+                results["checks"].append(
+                    {
+                        "name": "player_team_references",
+                        "description": "Check if players reference valid teams",
+                        "orphaned_records": orphaned_players,
+                        "status": "PASS" if orphaned_players == 0 else "FAIL",
+                    }
+                )
 
                 if orphaned_players > 0:
                     results["issues"].append(f"Found {orphaned_players} players with invalid team_id")
@@ -64,16 +68,20 @@ class DataIntegrityValidator:
                 cursor = conn.execute("SELECT COUNT(*) FROM players_current")
                 current_player_count = cursor.fetchone()[0]
 
-                results["checks"].append({
-                    "name": "raw_to_current_consistency",
-                    "description": "Check consistency between raw and current player data",
-                    "raw_count": raw_player_count,
-                    "current_count": current_player_count,
-                    "status": "PASS" if abs(raw_player_count - current_player_count) <= 5 else "WARN"
-                })
+                results["checks"].append(
+                    {
+                        "name": "raw_to_current_consistency",
+                        "description": "Check consistency between raw and current player data",
+                        "raw_count": raw_player_count,
+                        "current_count": current_player_count,
+                        "status": "PASS" if abs(raw_player_count - current_player_count) <= 5 else "WARN",
+                    }
+                )
 
                 if abs(raw_player_count - current_player_count) > 5:
-                    results["issues"].append(f"Significant difference between raw ({raw_player_count}) and current ({current_player_count}) player counts")
+                    results["issues"].append(
+                        f"Significant difference between raw ({raw_player_count}) and current ({current_player_count}) player counts"
+                    )
 
             except Exception as e:
                 results["issues"].append(f"Error validating relationships: {str(e)}")
@@ -82,7 +90,7 @@ class DataIntegrityValidator:
             "total_checks": len(results["checks"]),
             "passed_checks": len([c for c in results["checks"] if c["status"] == "PASS"]),
             "failed_checks": len([c for c in results["checks"] if c["status"] == "FAIL"]),
-            "total_issues": len(results["issues"])
+            "total_issues": len(results["issues"]),
         }
 
         return results
@@ -102,12 +110,14 @@ class DataIntegrityValidator:
                 """)
                 duplicate_players = cursor.fetchall()
 
-                results["checks"].append({
-                    "name": "unique_player_ids",
-                    "description": "Check for duplicate player IDs",
-                    "duplicate_count": len(duplicate_players),
-                    "status": "PASS" if len(duplicate_players) == 0 else "FAIL"
-                })
+                results["checks"].append(
+                    {
+                        "name": "unique_player_ids",
+                        "description": "Check for duplicate player IDs",
+                        "duplicate_count": len(duplicate_players),
+                        "status": "PASS" if len(duplicate_players) == 0 else "FAIL",
+                    }
+                )
 
                 if duplicate_players:
                     results["issues"].append(f"Found {len(duplicate_players)} duplicate player IDs")
@@ -119,15 +129,19 @@ class DataIntegrityValidator:
                 """)
                 invalid_prices = cursor.fetchone()[0]
 
-                results["checks"].append({
-                    "name": "valid_price_ranges",
-                    "description": "Check for players with invalid price ranges",
-                    "invalid_count": invalid_prices,
-                    "status": "PASS" if invalid_prices == 0 else "WARN"
-                })
+                results["checks"].append(
+                    {
+                        "name": "valid_price_ranges",
+                        "description": "Check for players with invalid price ranges",
+                        "invalid_count": invalid_prices,
+                        "status": "PASS" if invalid_prices == 0 else "WARN",
+                    }
+                )
 
                 if invalid_prices > 0:
-                    results["issues"].append(f"Found {invalid_prices} players with prices outside valid range (3.5-15.0)")
+                    results["issues"].append(
+                        f"Found {invalid_prices} players with prices outside valid range (3.5-15.0)"
+                    )
 
                 # Check for reasonable ownership percentages
                 cursor = conn.execute("""
@@ -136,12 +150,14 @@ class DataIntegrityValidator:
                 """)
                 invalid_ownership = cursor.fetchone()[0]
 
-                results["checks"].append({
-                    "name": "valid_ownership_ranges",
-                    "description": "Check for valid ownership percentages",
-                    "invalid_count": invalid_ownership,
-                    "status": "PASS" if invalid_ownership == 0 else "FAIL"
-                })
+                results["checks"].append(
+                    {
+                        "name": "valid_ownership_ranges",
+                        "description": "Check for valid ownership percentages",
+                        "invalid_count": invalid_ownership,
+                        "status": "PASS" if invalid_ownership == 0 else "FAIL",
+                    }
+                )
 
                 if invalid_ownership > 0:
                     results["issues"].append(f"Found {invalid_ownership} players with invalid ownership percentages")
@@ -150,12 +166,14 @@ class DataIntegrityValidator:
                 cursor = conn.execute("SELECT COUNT(*) FROM teams_current")
                 team_count = cursor.fetchone()[0]
 
-                results["checks"].append({
-                    "name": "correct_team_count",
-                    "description": "Check for correct number of Premier League teams",
-                    "team_count": team_count,
-                    "status": "PASS" if team_count == 20 else "FAIL"
-                })
+                results["checks"].append(
+                    {
+                        "name": "correct_team_count",
+                        "description": "Check for correct number of Premier League teams",
+                        "team_count": team_count,
+                        "status": "PASS" if team_count == 20 else "FAIL",
+                    }
+                )
 
                 if team_count != 20:
                     results["issues"].append(f"Expected 20 teams, found {team_count}")
@@ -173,12 +191,14 @@ class DataIntegrityValidator:
                 actual_positions = {pos[0] for pos in position_counts}
                 missing_positions = expected_positions - actual_positions
 
-                results["checks"].append({
-                    "name": "complete_position_coverage",
-                    "description": "Check all player positions are represented",
-                    "missing_positions": list(missing_positions),
-                    "status": "PASS" if len(missing_positions) == 0 else "FAIL"
-                })
+                results["checks"].append(
+                    {
+                        "name": "complete_position_coverage",
+                        "description": "Check all player positions are represented",
+                        "missing_positions": list(missing_positions),
+                        "status": "PASS" if len(missing_positions) == 0 else "FAIL",
+                    }
+                )
 
                 if missing_positions:
                     results["issues"].append(f"Missing positions: {', '.join(missing_positions)}")
@@ -190,7 +210,7 @@ class DataIntegrityValidator:
             "total_checks": len(results["checks"]),
             "passed_checks": len([c for c in results["checks"] if c["status"] == "PASS"]),
             "failed_checks": len([c for c in results["checks"] if c["status"] == "FAIL"]),
-            "total_issues": len(results["issues"])
+            "total_issues": len(results["issues"]),
         }
 
         return results
@@ -211,7 +231,6 @@ class DataIntegrityValidator:
             "raw_element_types": "FPL API position definitions",
             "raw_chips": "FPL API chip information",
             "raw_phases": "FPL API season phases",
-
             # Derived analytics tables
             "derived_player_metrics": "Advanced player analytics",
             "derived_team_form": "Team performance analysis",
@@ -245,14 +264,16 @@ class DataIntegrityValidator:
                         elif not columns:
                             status = "FAIL"  # Table exists but no columns
 
-                        results["checks"].append({
-                            "name": f"table_{table_name}",
-                            "description": f"Table {table_name}: {description}",
-                            "exists": True,
-                            "row_count": row_count,
-                            "column_count": len(columns),
-                            "status": status
-                        })
+                        results["checks"].append(
+                            {
+                                "name": f"table_{table_name}",
+                                "description": f"Table {table_name}: {description}",
+                                "exists": True,
+                                "row_count": row_count,
+                                "column_count": len(columns),
+                                "status": status,
+                            }
+                        )
 
                         if status != "PASS":
                             if row_count == 0:
@@ -261,29 +282,51 @@ class DataIntegrityValidator:
                                 results["issues"].append(f"Table {table_name} has no columns")
 
                     else:
-                        results["checks"].append({
-                            "name": f"table_{table_name}",
-                            "description": f"Table {table_name}: {description}",
-                            "exists": False,
-                            "status": "FAIL"
-                        })
+                        results["checks"].append(
+                            {
+                                "name": f"table_{table_name}",
+                                "description": f"Table {table_name}: {description}",
+                                "exists": False,
+                                "status": "FAIL",
+                            }
+                        )
                         results["issues"].append(f"Required table {table_name} is missing")
 
                 # Check for unexpected tables (might indicate issues)
-                expected_table_prefixes = {"raw_", "derived_", "players_", "teams_", "fixtures_", "fpl_", "gameweek_", "league_", "manager_", "match_", "player_", "vaastav_", "historical_", "injury_"}
+                expected_table_prefixes = {
+                    "raw_",
+                    "derived_",
+                    "players_",
+                    "teams_",
+                    "fixtures_",
+                    "fpl_",
+                    "gameweek_",
+                    "league_",
+                    "manager_",
+                    "match_",
+                    "player_",
+                    "vaastav_",
+                    "historical_",
+                    "injury_",
+                }
 
                 unexpected_tables = []
                 for table in existing_tables:
-                    if not any(table.startswith(prefix) for prefix in expected_table_prefixes) and table != "schema_migrations":
+                    if (
+                        not any(table.startswith(prefix) for prefix in expected_table_prefixes)
+                        and table != "schema_migrations"
+                    ):
                         unexpected_tables.append(table)
 
                 if unexpected_tables:
-                    results["checks"].append({
-                        "name": "unexpected_tables",
-                        "description": "Check for unexpected tables",
-                        "unexpected_tables": unexpected_tables,
-                        "status": "WARN"
-                    })
+                    results["checks"].append(
+                        {
+                            "name": "unexpected_tables",
+                            "description": "Check for unexpected tables",
+                            "unexpected_tables": unexpected_tables,
+                            "status": "WARN",
+                        }
+                    )
                     results["issues"].append(f"Found unexpected tables: {', '.join(unexpected_tables)}")
 
             except Exception as e:
@@ -293,7 +336,7 @@ class DataIntegrityValidator:
             "total_checks": len(results["checks"]),
             "passed_checks": len([c for c in results["checks"] if c["status"] == "PASS"]),
             "failed_checks": len([c for c in results["checks"] if c["status"] == "FAIL"]),
-            "total_issues": len(results["issues"])
+            "total_issues": len(results["issues"]),
         }
 
         return results
@@ -302,10 +345,7 @@ class DataIntegrityValidator:
         """Run all data integrity validations."""
         print("Running comprehensive data integrity validation...")
 
-        all_results = {
-            "validation_timestamp": datetime.now().isoformat(),
-            "database_path": self.db_path
-        }
+        all_results = {"validation_timestamp": datetime.now().isoformat(), "database_path": self.db_path}
 
         # Schema structure validation
         print("  Validating schema structure...")
@@ -323,10 +363,18 @@ class DataIntegrityValidator:
         all_results["relationship_validation"] = relationship_results
 
         # Overall summary
-        total_checks = sum(r["summary"]["total_checks"] for r in [schema_results, consistency_results, relationship_results])
-        total_passed = sum(r["summary"]["passed_checks"] for r in [schema_results, consistency_results, relationship_results])
-        total_failed = sum(r["summary"]["failed_checks"] for r in [schema_results, consistency_results, relationship_results])
-        total_issues = sum(r["summary"]["total_issues"] for r in [schema_results, consistency_results, relationship_results])
+        total_checks = sum(
+            r["summary"]["total_checks"] for r in [schema_results, consistency_results, relationship_results]
+        )
+        total_passed = sum(
+            r["summary"]["passed_checks"] for r in [schema_results, consistency_results, relationship_results]
+        )
+        total_failed = sum(
+            r["summary"]["failed_checks"] for r in [schema_results, consistency_results, relationship_results]
+        )
+        total_issues = sum(
+            r["summary"]["total_issues"] for r in [schema_results, consistency_results, relationship_results]
+        )
 
         all_results["overall_summary"] = {
             "total_checks": total_checks,
@@ -334,7 +382,7 @@ class DataIntegrityValidator:
             "failed_checks": total_failed,
             "total_issues": total_issues,
             "success_rate": (total_passed / total_checks) if total_checks > 0 else 0,
-            "overall_status": "PASS" if total_failed == 0 else "FAIL"
+            "overall_status": "PASS" if total_failed == 0 else "FAIL",
         }
 
         return all_results
@@ -366,7 +414,9 @@ class DataIntegrityValidator:
         if schema_results:
             report.append("🏗️  Schema Structure Validation:")
             schema_summary = schema_results.get("summary", {})
-            report.append(f"   Checks: {schema_summary.get('passed_checks', 0)}/{schema_summary.get('total_checks', 0)} passed")
+            report.append(
+                f"   Checks: {schema_summary.get('passed_checks', 0)}/{schema_summary.get('total_checks', 0)} passed"
+            )
 
             # Show critical issues
             for check in schema_results.get("checks", []):
@@ -382,7 +432,9 @@ class DataIntegrityValidator:
         if consistency_results:
             report.append("🔍 Data Consistency Validation:")
             consistency_summary = consistency_results.get("summary", {})
-            report.append(f"   Checks: {consistency_summary.get('passed_checks', 0)}/{consistency_summary.get('total_checks', 0)} passed")
+            report.append(
+                f"   Checks: {consistency_summary.get('passed_checks', 0)}/{consistency_summary.get('total_checks', 0)} passed"
+            )
 
             # Show issues
             for issue in consistency_results.get("issues", [])[:5]:  # First 5 issues
@@ -395,7 +447,9 @@ class DataIntegrityValidator:
         if relationship_results:
             report.append("🔗 Relationship Validation:")
             relationship_summary = relationship_results.get("summary", {})
-            report.append(f"   Checks: {relationship_summary.get('passed_checks', 0)}/{relationship_summary.get('total_checks', 0)} passed")
+            report.append(
+                f"   Checks: {relationship_summary.get('passed_checks', 0)}/{relationship_summary.get('total_checks', 0)} passed"
+            )
 
             # Show issues
             for issue in relationship_results.get("issues", [])[:5]:  # First 5 issues
@@ -451,10 +505,11 @@ if __name__ == "__main__":
 
     # Save detailed results
     import json
+
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     results_file = f"validation_results_{timestamp}.json"
 
-    with open(results_file, 'w') as f:
+    with open(results_file, "w") as f:
         json.dump(results, f, indent=2, default=str)
 
     print(f"\nDetailed results saved to: {results_file}")

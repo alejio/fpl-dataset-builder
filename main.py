@@ -134,33 +134,45 @@ def main(
     typer.echo()
 
     # 3. Process live gameweek data
-    if include_live and current_gameweek and not is_finished:
-        typer.echo(f"🔴 Fetching live data for gameweek {current_gameweek}...")
+    if include_live and current_gameweek:
+        # Check if we already have data for this gameweek
+        from client.fpl_data_client import FPLDataClient
 
-        # Fetch live gameweek performance data
-        live_data = fetch_gameweek_live_data(current_gameweek)
-        if live_data:
-            from fetchers.raw_processor import process_raw_gameweek_performance
+        client = FPLDataClient()
 
-            gameweek_performance_df = process_raw_gameweek_performance(live_data, current_gameweek)
+        try:
+            existing_data = client.get_gameweek_performance(current_gameweek)
+            has_existing_data = not existing_data.empty
+        except Exception:
+            has_existing_data = False
 
-            if not gameweek_performance_df.empty:
-                db_ops.save_raw_player_gameweek_performance(gameweek_performance_df)
-                typer.echo(f"✅ Saved gameweek {current_gameweek} performance data")
+        if not has_existing_data:
+            status = "finished" if is_finished else "in progress"
+            typer.echo(f"🔴 Fetching data for gameweek {current_gameweek} ({status})...")
 
-        # Fetch updated manager picks for current gameweek
-        updated_picks = fetch_manager_gameweek_picks(manager_id, current_gameweek)
-        if updated_picks:
-            from fetchers.raw_processor import process_raw_my_picks
+            # Fetch live gameweek performance data
+            live_data = fetch_gameweek_live_data(current_gameweek)
+            if live_data:
+                from fetchers.raw_processor import process_raw_gameweek_performance
 
-            picks_df = process_raw_my_picks({**updated_picks, "current_event": current_gameweek})
+                gameweek_performance_df = process_raw_gameweek_performance(live_data, current_gameweek)
 
-            if not picks_df.empty:
-                db_ops.save_raw_my_picks(picks_df)
-                typer.echo(f"✅ Updated picks for gameweek {current_gameweek}")
+                if not gameweek_performance_df.empty:
+                    db_ops.save_raw_player_gameweek_performance(gameweek_performance_df)
+                    typer.echo(f"✅ Saved gameweek {current_gameweek} performance data")
 
-    elif include_live and is_finished:
-        typer.echo(f"ℹ️  Gameweek {current_gameweek} is finished - skipping live data fetch")
+            # Fetch updated manager picks for current gameweek
+            updated_picks = fetch_manager_gameweek_picks(manager_id, current_gameweek)
+            if updated_picks:
+                from fetchers.raw_processor import process_raw_my_picks
+
+                picks_df = process_raw_my_picks({**updated_picks, "current_event": current_gameweek})
+
+                if not picks_df.empty:
+                    db_ops.save_raw_my_picks(picks_df)
+                    typer.echo(f"✅ Updated picks for gameweek {current_gameweek}")
+        else:
+            typer.echo(f"ℹ️  Gameweek {current_gameweek} data already exists - skipping fetch")
 
     if update_historical:
         typer.echo("📚 Historical data processing feature available but not enabled by default")

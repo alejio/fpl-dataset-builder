@@ -28,7 +28,7 @@ class DatabaseTestSuite:
 
     def setup_test_database(self):
         """Create temporary database for testing."""
-        self.temp_db = tempfile.NamedTemporaryFile(suffix='.db', delete=False)
+        self.temp_db = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
         self.temp_db.close()
 
         # Create test engine
@@ -58,7 +58,7 @@ class DatabaseTestSuite:
                 "duration_seconds": end_time - start_time,
                 "success": True,
                 "timestamp": datetime.now().isoformat(),
-                "result_size": len(result) if hasattr(result, '__len__') else None
+                "result_size": len(result) if hasattr(result, "__len__") else None,
             }
             return result
         except Exception as e:
@@ -67,7 +67,7 @@ class DatabaseTestSuite:
                 "duration_seconds": end_time - start_time,
                 "success": False,
                 "error": str(e),
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat(),
             }
             raise
 
@@ -121,46 +121,68 @@ class DatabaseTestSuite:
                 # Test single inserts
                 start_time = time.time()
                 for i in range(min(sample_size, 100)):  # Limit single inserts
-                    conn.execute("""
+                    conn.execute(
+                        """
                         INSERT INTO players_current
                         (player_id, web_name, first, second, team_id, position,
                          price_gbp, selected_by_percentage, availability_status, as_of_utc)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (
-                        i, f"Player_{i}", f"First_{i}", f"Last_{i}",
-                        (i % 20) + 1, "MID", 5.0, 10.0, "a", datetime.now().isoformat()
-                    ))
+                    """,
+                        (
+                            i,
+                            f"Player_{i}",
+                            f"First_{i}",
+                            f"Last_{i}",
+                            (i % 20) + 1,
+                            "MID",
+                            5.0,
+                            10.0,
+                            "a",
+                            datetime.now().isoformat(),
+                        ),
+                    )
                 conn.commit()
                 single_insert_time = time.time() - start_time
                 results["single_inserts"] = {
                     "duration": single_insert_time,
                     "records": min(sample_size, 100),
-                    "records_per_second": min(sample_size, 100) / single_insert_time
+                    "records_per_second": min(sample_size, 100) / single_insert_time,
                 }
 
                 # Test batch inserts
                 batch_data = [
                     (
-                        i + 1000, f"Batch_Player_{i}", f"First_{i}", f"Last_{i}",
-                        (i % 20) + 1, "FWD", 6.0, 15.0, "a", datetime.now().isoformat()
+                        i + 1000,
+                        f"Batch_Player_{i}",
+                        f"First_{i}",
+                        f"Last_{i}",
+                        (i % 20) + 1,
+                        "FWD",
+                        6.0,
+                        15.0,
+                        "a",
+                        datetime.now().isoformat(),
                     )
                     for i in range(sample_size)
                 ]
 
                 start_time = time.time()
-                conn.executemany("""
+                conn.executemany(
+                    """
                     INSERT INTO players_current
                     (player_id, web_name, first, second, team_id, position,
                      price_gbp, selected_by_percentage, availability_status, as_of_utc)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, batch_data)
+                """,
+                    batch_data,
+                )
                 conn.commit()
                 batch_insert_time = time.time() - start_time
 
                 results["batch_inserts"] = {
                     "duration": batch_insert_time,
                     "records": sample_size,
-                    "records_per_second": sample_size / batch_insert_time
+                    "records_per_second": sample_size / batch_insert_time,
                 }
 
         except Exception as e:
@@ -178,10 +200,7 @@ class DatabaseTestSuite:
                 start_time = time.time()
                 cursor = conn.execute("SELECT COUNT(*) FROM players_current")
                 count = cursor.fetchone()[0]
-                results["count_query"] = {
-                    "duration": time.time() - start_time,
-                    "result": count
-                }
+                results["count_query"] = {"duration": time.time() - start_time, "result": count}
 
                 # Complex join query
                 if count > 0:
@@ -194,10 +213,7 @@ class DatabaseTestSuite:
                         LIMIT 10
                     """)
                     top_players = cursor.fetchall()
-                    results["complex_query"] = {
-                        "duration": time.time() - start_time,
-                        "result_count": len(top_players)
-                    }
+                    results["complex_query"] = {"duration": time.time() - start_time, "result_count": len(top_players)}
 
                 # Aggregation query
                 start_time = time.time()
@@ -209,7 +225,7 @@ class DatabaseTestSuite:
                 aggregation_results = cursor.fetchall()
                 results["aggregation_query"] = {
                     "duration": time.time() - start_time,
-                    "result_count": len(aggregation_results)
+                    "result_count": len(aggregation_results),
                 }
 
         except Exception as e:
@@ -228,9 +244,12 @@ class DatabaseTestSuite:
 
             # Test method existence
             methods_to_test = [
-                "get_current_players", "get_current_teams", "get_fixtures_normalized",
-                "get_raw_players_bootstrap", "get_derived_player_metrics",
-                "get_database_summary"
+                "get_current_players",
+                "get_current_teams",
+                "get_fixtures_normalized",
+                "get_raw_players_bootstrap",
+                "get_derived_player_metrics",
+                "get_database_summary",
             ]
 
             for method_name in methods_to_test:
@@ -256,7 +275,7 @@ class DatabaseTestSuite:
             schema_info = migration_manager.get_schema_info()
             results["schema_info"] = {
                 "total_tables": schema_info["total_tables"],
-                "current_version": schema_info["current_version"]
+                "current_version": schema_info["current_version"],
             }
 
             # Test schema validation
@@ -264,7 +283,7 @@ class DatabaseTestSuite:
             results["schema_validation"] = {
                 "is_valid": is_valid,
                 "issue_count": len(issues),
-                "issues": issues[:5]  # First 5 issues
+                "issues": issues[:5],  # First 5 issues
             }
 
         except Exception as e:
@@ -279,10 +298,7 @@ class DatabaseTestSuite:
         self.setup_test_database()
 
         try:
-            all_results = {
-                "test_timestamp": datetime.now().isoformat(),
-                "database_path": self.temp_db.name
-            }
+            all_results = {"test_timestamp": datetime.now().isoformat(), "database_path": self.temp_db.name}
 
             # Basic connectivity
             all_results["connection_test"] = self.test_database_connection()
@@ -292,14 +308,11 @@ class DatabaseTestSuite:
 
             # Performance tests
             all_results["insertion_performance"] = self.benchmark_operation(
-                "data_insertion",
-                self.test_data_insertion_performance,
-                1000
+                "data_insertion", self.test_data_insertion_performance, 1000
             )
 
             all_results["query_performance"] = self.benchmark_operation(
-                "query_performance",
-                self.test_query_performance
+                "query_performance", self.test_query_performance
             )
 
             # Client library tests
@@ -410,10 +423,11 @@ if __name__ == "__main__":
 
     # Save detailed results
     import json
+
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     results_file = f"test_results_{timestamp}.json"
 
-    with open(results_file, 'w') as f:
+    with open(results_file, "w") as f:
         json.dump(results, f, indent=2, default=str)
 
     print(f"\nDetailed results saved to: {results_file}")
