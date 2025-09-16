@@ -217,6 +217,9 @@ raw_players = client.get_raw_players_bootstrap()
 raw_teams = client.get_raw_teams_bootstrap()
 raw_fixtures = client.get_raw_fixtures()
 
+# Get enhanced player data with ML-valuable features (46 curated columns)
+enhanced_players = client.get_players_enhanced()
+
 # Get derived analytics data
 player_metrics = client.get_derived_player_metrics()
 team_form = client.get_derived_team_form()

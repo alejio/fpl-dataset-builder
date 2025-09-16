@@ -277,6 +277,145 @@ class FPLDataClient:
         except Exception as e:
             raise RuntimeError(f"Failed to fetch gameweek {gameweek} performance: {e}") from e
 
+    def get_players_enhanced(self) -> pd.DataFrame:
+        """Get current players with enhanced ML-valuable features.
+
+        Returns:
+            DataFrame combining basic player data with high-value features:
+            - Injury/availability risk (chance_of_playing_next_round, chance_of_playing_this_round)
+            - Set piece priorities (corners_and_indirect_freekicks_order, direct_freekicks_order, penalties_order)
+            - Performance rankings (form_rank, ict_index_rank, points_per_game_rank)
+            - Transfer momentum (transfers_in_event, transfers_out_event)
+            - Advanced metrics (expected_goals_per_90, expected_assists_per_90)
+            - Market intelligence (cost_change_event, news)
+        """
+        try:
+            # Get full raw data using existing method
+            full_data = self.get_raw_players_bootstrap()
+
+            if full_data.empty:
+                return pd.DataFrame()
+
+            # Define columns to include - basic + priority enhanced features
+            basic_columns = [
+                "player_id",
+                "web_name",
+                "first_name",
+                "second_name",
+                "team_id",
+                "position_id",
+                "now_cost",
+                "total_points",
+                "form",
+                "selected_by_percent",
+                "minutes",
+                "starts",
+            ]
+
+            # Priority ML-valuable features (14 key features)
+            priority_features = [
+                "chance_of_playing_next_round",  # Injury risk (0-100%)
+                "chance_of_playing_this_round",  # Current availability (0-100%)
+                "corners_and_indirect_freekicks_order",  # Corner taker priority
+                "direct_freekicks_order",  # Free kick taker priority
+                "penalties_order",  # Penalty taker priority
+                "expected_goals_per_90",  # xG per 90 minutes
+                "expected_assists_per_90",  # xA per 90 minutes
+                "transfers_in_event",  # Transfers in this gameweek
+                "transfers_out_event",  # Transfers out this gameweek
+                "form_rank",  # Form ranking among all players
+                "ict_index_rank",  # ICT index ranking
+                "points_per_game_rank",  # Points per game ranking
+                "news",  # Injury/team news text
+                "cost_change_event",  # Price change this gameweek
+            ]
+
+            # Additional valuable features
+            additional_features = [
+                "cost_change_start",  # Price change since season start
+                "value_form",  # Form-based value rating
+                "influence_rank",  # Influence ranking
+                "creativity_rank",  # Creativity ranking
+                "threat_rank",  # Threat ranking
+                "defensive_contribution",  # Defensive metrics
+                "tackles",  # Tackles
+                "recoveries",  # Recoveries
+                "goals_scored",  # Goals scored
+                "assists",  # Assists
+                "clean_sheets",  # Clean sheets
+                "bonus",  # Bonus points
+                "bps",  # Bonus points system score
+                "influence",  # Influence score
+                "creativity",  # Creativity score
+                "threat",  # Threat score
+                "ict_index",  # ICT index
+                "expected_goals",  # Expected goals
+                "expected_assists",  # Expected assists
+                "points_per_game",  # Points per game
+            ]
+
+            # Combine all desired columns
+            all_columns = basic_columns + priority_features + additional_features
+
+            # Filter to only include columns that exist in the data
+            available_columns = [col for col in all_columns if col in full_data.columns]
+
+            # Select the desired columns
+            enhanced_data = full_data[available_columns].copy()
+
+            # Ensure proper data types for numeric columns
+            numeric_columns = [
+                "chance_of_playing_next_round",
+                "chance_of_playing_this_round",
+                "corners_and_indirect_freekicks_order",
+                "direct_freekicks_order",
+                "penalties_order",
+                "expected_goals_per_90",
+                "expected_assists_per_90",
+                "transfers_in_event",
+                "transfers_out_event",
+                "form_rank",
+                "ict_index_rank",
+                "points_per_game_rank",
+                "cost_change_event",
+                "cost_change_start",
+                "value_form",
+                "influence_rank",
+                "creativity_rank",
+                "threat_rank",
+                "defensive_contribution",
+                "tackles",
+                "recoveries",
+                "goals_scored",
+                "assists",
+                "clean_sheets",
+                "bonus",
+                "bps",
+                "influence",
+                "creativity",
+                "threat",
+                "ict_index",
+                "expected_goals",
+                "expected_assists",
+                "points_per_game",
+                "now_cost",
+                "total_points",
+                "form",
+                "selected_by_percent",
+                "minutes",
+                "starts",
+            ]
+
+            # Convert numeric columns to proper types
+            for col in numeric_columns:
+                if col in enhanced_data.columns:
+                    enhanced_data[col] = pd.to_numeric(enhanced_data[col], errors="coerce")
+
+            return enhanced_data
+
+        except Exception as e:
+            raise RuntimeError(f"Failed to fetch enhanced players data: {e}") from e
+
     # Legacy compatibility methods (transform raw data to legacy format)
     def get_current_players(self) -> pd.DataFrame:
         """Get current season player data in legacy normalized format.
@@ -433,6 +572,11 @@ def get_my_manager_data() -> pd.DataFrame:
 def get_my_current_picks() -> pd.DataFrame:
     """Get my current gameweek team picks."""
     return _get_client().get_my_current_picks()
+
+
+def get_players_enhanced() -> pd.DataFrame:
+    """Get current players with enhanced ML-valuable features."""
+    return _get_client().get_players_enhanced()
 
 
 # Legacy compatibility functions
