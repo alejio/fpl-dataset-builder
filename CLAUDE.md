@@ -250,6 +250,31 @@ print(f"Raw player data: {len(raw_players.columns)} fields")
 print(f"Raw game settings: {len(raw_settings.columns)} configuration fields")
 ```
 
+**Enhanced Player Data for ML (NEW):**
+```python
+client = FPLDataClient()
+
+# Get curated player data with 46 ML-valuable features
+enhanced_players = client.get_players_enhanced()
+
+# Priority features (14 key ML features):
+# - Injury/availability risk (chance_of_playing_next_round, chance_of_playing_this_round)
+# - Set piece priorities (corners_and_indirect_freekicks_order, direct_freekicks_order, penalties_order)
+# - Performance rankings (form_rank, ict_index_rank, points_per_game_rank)
+# - Transfer momentum (transfers_in_event, transfers_out_event)
+# - Advanced metrics (expected_goals_per_90, expected_assists_per_90)
+# - Market intelligence (cost_change_event, news)
+
+# Example ML usage:
+penalty_takers = enhanced_players[enhanced_players['penalties_order'] == 1]
+injury_risks = enhanced_players[enhanced_players['chance_of_playing_next_round'] < 75]
+high_transfers = enhanced_players.nlargest(5, 'transfers_in_event')
+
+print(f"Enhanced player data: {enhanced_players.shape[1]} curated ML features")
+print(f"Primary penalty takers: {len(penalty_takers)}")
+print(f"Players with injury risk: {len(injury_risks)}")
+```
+
 **Derived Analytics Access:**
 ```python
 client = FPLDataClient()
@@ -419,6 +444,9 @@ All methods are accessed through the `FPLDataClient` class:
 - `get_raw_chips()` - Complete raw chip availability and rules
 - `get_raw_phases()` - Complete raw season phase information
 - `get_raw_fixtures()` - Complete raw fixture data (all fields from FPL API)
+
+**Enhanced Player Data (ML-Optimized Features):**
+- `get_players_enhanced()` - Curated player data with 46 ML-valuable features including injury risk, set piece priorities, performance rankings, transfer momentum, and advanced metrics
 
 **Derived Analytics Data (Processed Insights):**
 - `get_derived_player_metrics()` - Advanced player analytics with value scores and risk analysis
