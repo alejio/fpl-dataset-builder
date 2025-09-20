@@ -15,6 +15,7 @@ from .fpl_data_client import (
     # Legacy compatibility functions
     get_current_players,
     get_current_teams,
+    get_data_freshness,
     get_database_summary,
     get_derived_fixture_difficulty,
     get_derived_ownership_trends,
@@ -42,6 +43,7 @@ from .fpl_data_client import (
 __all__ = [
     "FPLDataClient",
     "get_database_summary",
+    "get_data_freshness",
     "get_my_current_picks",
     "get_my_manager_data",
     # Legacy compatibility functions
