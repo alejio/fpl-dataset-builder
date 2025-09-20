@@ -1,6 +1,9 @@
 """Database operations for raw and derived data only - lean architecture."""
 
+from datetime import datetime
+
 import pandas as pd
+from sqlalchemy import func
 from sqlalchemy.inspection import inspect
 
 from . import models_derived, models_raw
@@ -692,6 +695,101 @@ class DatabaseOperations:
             summary["derived_tables"] = len(derived_tables)
 
             return summary
+
+    def get_data_freshness_summary(self) -> dict:
+        """Get comprehensive data freshness summary with timestamps from all tables.
+
+        Returns:
+            Dict containing:
+            - raw_data_timestamps: Dict of raw table names to their as_of_utc timestamps
+            - derived_data_timestamps: Dict of derived table names to their timestamp fields
+            - oldest_data: Oldest timestamp across all tables
+            - newest_data: Newest timestamp across all tables
+            - data_age_hours: Hours since newest data update
+            - freshness_status: Simple status indicator
+        """
+        with next(get_session()) as session:
+            freshness_data = {
+                "raw_data_timestamps": {},
+                "derived_data_timestamps": {},
+                "oldest_data": None,
+                "newest_data": None,
+                "data_age_hours": None,
+                "freshness_status": "unknown",
+            }
+
+            all_timestamps = []
+
+            # Raw data tables with as_of_utc
+            raw_tables = [
+                ("raw_players_bootstrap", models_raw.RawPlayerBootstrap),
+                ("raw_teams_bootstrap", models_raw.RawTeamBootstrap),
+                ("raw_events_bootstrap", models_raw.RawEventBootstrap),
+                ("raw_fixtures", models_raw.RawFixtures),
+                ("raw_game_settings", models_raw.RawGameSettings),
+                ("raw_element_stats", models_raw.RawElementStats),
+                ("raw_element_types", models_raw.RawElementTypes),
+                ("raw_chips", models_raw.RawChips),
+                ("raw_phases", models_raw.RawPhases),
+                ("raw_my_manager", models_raw.RawMyManager),
+                ("raw_my_picks", models_raw.RawMyPicks),
+                ("raw_player_gameweek_performance", models_raw.RawPlayerGameweekPerformance),
+            ]
+
+            # Query raw data timestamps
+            for table_name, model_class in raw_tables:
+                try:
+                    latest_timestamp = session.query(func.max(model_class.as_of_utc)).scalar()
+                    if latest_timestamp:
+                        freshness_data["raw_data_timestamps"][table_name] = latest_timestamp
+                        all_timestamps.append(latest_timestamp)
+                except Exception as e:
+                    freshness_data["raw_data_timestamps"][table_name] = f"Error: {str(e)}"
+
+            # Derived data tables with various timestamp fields
+            derived_tables = [
+                ("derived_player_metrics", models_derived.DerivedPlayerMetrics, "calculation_date"),
+                ("derived_team_form", models_derived.DerivedTeamForm, "last_updated"),
+                ("derived_fixture_difficulty", models_derived.DerivedFixtureDifficulty, "calculation_date"),
+                ("derived_value_analysis", models_derived.DerivedValueAnalysis, "analysis_date"),
+                ("derived_ownership_trends", models_derived.DerivedOwnershipTrends, "last_updated"),
+            ]
+
+            # Query derived data timestamps
+            for table_name, model_class, timestamp_field in derived_tables:
+                try:
+                    timestamp_attr = getattr(model_class, timestamp_field)
+                    latest_timestamp = session.query(func.max(timestamp_attr)).scalar()
+                    if latest_timestamp:
+                        freshness_data["derived_data_timestamps"][table_name] = {
+                            "timestamp": latest_timestamp,
+                            "field": timestamp_field,
+                        }
+                        all_timestamps.append(latest_timestamp)
+                except Exception as e:
+                    freshness_data["derived_data_timestamps"][table_name] = f"Error: {str(e)}"
+
+            # Calculate overall freshness metrics
+            if all_timestamps:
+                freshness_data["oldest_data"] = min(all_timestamps)
+                freshness_data["newest_data"] = max(all_timestamps)
+
+                # Calculate data age in hours
+                now = datetime.now()
+                time_diff = now - freshness_data["newest_data"]
+                freshness_data["data_age_hours"] = round(time_diff.total_seconds() / 3600, 2)
+
+                # Determine freshness status
+                if freshness_data["data_age_hours"] <= 1:
+                    freshness_data["freshness_status"] = "very_fresh"
+                elif freshness_data["data_age_hours"] <= 6:
+                    freshness_data["freshness_status"] = "fresh"
+                elif freshness_data["data_age_hours"] <= 24:
+                    freshness_data["freshness_status"] = "stale"
+                else:
+                    freshness_data["freshness_status"] = "very_stale"
+
+            return freshness_data
 
 
 # Global database operations instance

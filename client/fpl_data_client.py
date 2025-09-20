@@ -487,6 +487,131 @@ class FPLDataClient:
         except Exception as e:
             raise RuntimeError(f"Failed to fetch database summary: {e}") from e
 
+    def get_data_freshness(self) -> dict:
+        """Get comprehensive data freshness information with user-friendly formatting.
+
+        Returns:
+            Dictionary containing:
+            - raw_data_freshness: Human-readable timestamps for raw data tables
+            - derived_data_freshness: Human-readable timestamps for derived data tables
+            - overall_freshness: Summary of data freshness
+            - data_age_description: Human-readable description of data age
+            - recommendations: Suggested actions based on data age
+        """
+        try:
+            # Get raw freshness data from database operations
+            freshness_summary = db_ops.get_data_freshness_summary()
+
+            # Format for user consumption
+            user_friendly_data = {
+                "raw_data_freshness": {},
+                "derived_data_freshness": {},
+                "overall_freshness": {
+                    "last_updated": None,
+                    "data_age_hours": freshness_summary.get("data_age_hours"),
+                    "status": freshness_summary.get("freshness_status", "unknown"),
+                },
+                "data_age_description": "Unknown",
+                "recommendations": [],
+            }
+
+            # Format raw data timestamps
+            for table, timestamp in freshness_summary.get("raw_data_timestamps", {}).items():
+                if isinstance(timestamp, str):  # Error case
+                    user_friendly_data["raw_data_freshness"][table] = timestamp
+                else:
+                    user_friendly_data["raw_data_freshness"][table] = {
+                        "timestamp": timestamp,
+                        "age_description": self._format_time_ago(timestamp),
+                    }
+
+            # Format derived data timestamps
+            for table, data in freshness_summary.get("derived_data_timestamps", {}).items():
+                if isinstance(data, str):  # Error case
+                    user_friendly_data["derived_data_freshness"][table] = data
+                else:
+                    timestamp = data.get("timestamp")
+                    user_friendly_data["derived_data_freshness"][table] = {
+                        "timestamp": timestamp,
+                        "field": data.get("field"),
+                        "age_description": self._format_time_ago(timestamp),
+                    }
+
+            # Set overall freshness info
+            if freshness_summary.get("newest_data"):
+                user_friendly_data["overall_freshness"]["last_updated"] = freshness_summary["newest_data"]
+
+            # Create human-readable age description
+            data_age_hours = freshness_summary.get("data_age_hours")
+            if data_age_hours is not None:
+                if data_age_hours < 1:
+                    user_friendly_data["data_age_description"] = (
+                        f"Very fresh (updated {int(data_age_hours * 60)} minutes ago)"
+                    )
+                elif data_age_hours < 24:
+                    user_friendly_data["data_age_description"] = f"Fresh (updated {data_age_hours:.1f} hours ago)"
+                elif data_age_hours < 48:
+                    user_friendly_data["data_age_description"] = f"Stale (updated {data_age_hours:.1f} hours ago)"
+                else:
+                    days = data_age_hours / 24
+                    user_friendly_data["data_age_description"] = f"Very stale (updated {days:.1f} days ago)"
+
+            # Generate recommendations based on freshness
+            status = freshness_summary.get("freshness_status")
+            if status == "very_fresh":
+                user_friendly_data["recommendations"] = ["Data is very fresh - good for analysis"]
+            elif status == "fresh":
+                user_friendly_data["recommendations"] = ["Data is relatively fresh - suitable for most analysis"]
+            elif status == "stale":
+                user_friendly_data["recommendations"] = [
+                    "Data is getting stale - consider running 'uv run main.py main' to update",
+                    "Some analysis may be less accurate",
+                ]
+            else:  # very_stale or unknown
+                user_friendly_data["recommendations"] = [
+                    "Data is very stale - run 'uv run main.py main' to fetch fresh data",
+                    "Analysis results may be significantly outdated",
+                ]
+
+            return user_friendly_data
+
+        except Exception as e:
+            raise RuntimeError(f"Failed to fetch data freshness: {e}") from e
+
+    def _format_time_ago(self, timestamp) -> str:
+        """Format a timestamp as a human-readable 'time ago' string.
+
+        Args:
+            timestamp: datetime object
+
+        Returns:
+            Human-readable string like "2 hours ago" or "3 days ago"
+        """
+        if timestamp is None:
+            return "Unknown"
+
+        try:
+            from datetime import datetime
+
+            now = datetime.now()
+            time_diff = now - timestamp
+
+            total_seconds = time_diff.total_seconds()
+
+            if total_seconds < 60:
+                return "Less than a minute ago"
+            elif total_seconds < 3600:  # Less than an hour
+                minutes = int(total_seconds / 60)
+                return f"{minutes} minute{'s' if minutes != 1 else ''} ago"
+            elif total_seconds < 86400:  # Less than a day
+                hours = int(total_seconds / 3600)
+                return f"{hours} hour{'s' if hours != 1 else ''} ago"
+            else:  # Days
+                days = int(total_seconds / 86400)
+                return f"{days} day{'s' if days != 1 else ''} ago"
+        except Exception:
+            return "Unknown"
+
 
 # Convenience functions for direct access
 def get_raw_players_bootstrap() -> pd.DataFrame:
@@ -562,6 +687,11 @@ def get_derived_ownership_trends() -> pd.DataFrame:
 def get_database_summary() -> dict[str, int]:
     """Get comprehensive database summary with table row counts."""
     return _get_client().get_database_summary()
+
+
+def get_data_freshness() -> dict:
+    """Get comprehensive data freshness information with user-friendly formatting."""
+    return _get_client().get_data_freshness()
 
 
 def get_my_manager_data() -> pd.DataFrame:
