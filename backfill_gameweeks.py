@@ -51,12 +51,19 @@ def get_missing_gameweeks(db_ops: DatabaseOperations, max_gameweek: int) -> list
     return missing_gameweeks
 
 
-def backfill_gameweek(db_ops: DatabaseOperations, gameweek: int, manager_id: int, dry_run: bool = False) -> bool:
+def backfill_gameweek(
+    db_ops: DatabaseOperations, gameweek: int, manager_id: int, dry_run: bool = False, bootstrap_data: dict = None
+) -> bool:
     """Backfill a specific gameweek's data including player performance and manager picks."""
     print(f"\n🔄 Processing gameweek {gameweek}...")
 
     success_count = 0
     total_operations = 2  # player performance + manager picks
+
+    # Fetch bootstrap data if not provided (for historical prices)
+    if bootstrap_data is None:
+        print("  🔄 Fetching current bootstrap data for price lookup...")
+        bootstrap_data = fetch_fpl_bootstrap()
 
     try:
         # 1. Fetch and process player performance data
@@ -68,8 +75,8 @@ def backfill_gameweek(db_ops: DatabaseOperations, gameweek: int, manager_id: int
         elif "elements" not in live_data or not live_data["elements"]:
             print(f"  ⚠️  No player data found for gameweek {gameweek}")
         else:
-            # Process the player performance data
-            gameweek_performance_df = process_raw_gameweek_performance(live_data, gameweek)
+            # Process the player performance data with bootstrap data for prices
+            gameweek_performance_df = process_raw_gameweek_performance(live_data, gameweek, bootstrap_data)
 
             if gameweek_performance_df.empty:
                 print(f"  ⚠️  Processed player performance data is empty for gameweek {gameweek}")
@@ -154,6 +161,14 @@ def main(
     # Initialize database operations
     db_ops = DatabaseOperations()
 
+    # Fetch bootstrap data once for price lookups
+    print("🔄 Fetching bootstrap data for player price lookups...")
+    try:
+        bootstrap = fetch_fpl_bootstrap()
+    except Exception as e:
+        print(f"❌ Error fetching bootstrap data: {e}")
+        return
+
     # Determine which gameweeks to process
     target_gameweeks = []
 
@@ -171,7 +186,6 @@ def main(
         # Auto-detect missing gameweeks up to current
         print("🔍 Auto-detecting current gameweek and missing data...")
         try:
-            bootstrap = fetch_fpl_bootstrap()
             current_gameweek, is_finished = get_current_gameweek(bootstrap)
             print(f"📅 Current gameweek: {current_gameweek} ({'Finished' if is_finished else 'In Progress'})")
 
@@ -209,7 +223,7 @@ def main(
                 print(f"⏭️  Gameweek {gw}: Data already exists ({len(existing_data)} records), skipping...")
                 continue
 
-        success = backfill_gameweek(db_ops, gw, manager_id, dry_run)
+        success = backfill_gameweek(db_ops, gw, manager_id, dry_run, bootstrap)
         if success:
             successful += 1
         else:

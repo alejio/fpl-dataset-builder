@@ -155,7 +155,7 @@ def main(
             if live_data:
                 from fetchers.raw_processor import process_raw_gameweek_performance
 
-                gameweek_performance_df = process_raw_gameweek_performance(live_data, current_gameweek)
+                gameweek_performance_df = process_raw_gameweek_performance(live_data, current_gameweek, bootstrap)
 
                 if not gameweek_performance_df.empty:
                     db_ops.save_raw_player_gameweek_performance(gameweek_performance_df)

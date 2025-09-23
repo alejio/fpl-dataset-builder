@@ -82,7 +82,7 @@ class DatabaseTestSuite:
             print(f"Database connection test failed: {e}")
             return False
 
-    def test_table_creation(self) -> Dict[str, Any]:
+    def test_table_creation(self) -> dict[str, Any]:
         """Test all table creation and schema validation."""
         results = {"tables_created": 0, "issues": []}
 
@@ -112,7 +112,7 @@ class DatabaseTestSuite:
 
         return results
 
-    def test_data_insertion_performance(self, sample_size: int = 1000) -> Dict[str, Any]:
+    def test_data_insertion_performance(self, sample_size: int = 1000) -> dict[str, Any]:
         """Test data insertion performance with various batch sizes."""
         results = {}
 
@@ -190,7 +190,7 @@ class DatabaseTestSuite:
 
         return results
 
-    def test_query_performance(self) -> Dict[str, Any]:
+    def test_query_performance(self) -> dict[str, Any]:
         """Test query performance across different table sizes."""
         results = {}
 
@@ -233,7 +233,7 @@ class DatabaseTestSuite:
 
         return results
 
-    def test_client_library_functions(self) -> Dict[str, Any]:
+    def test_client_library_functions(self) -> dict[str, Any]:
         """Test client library functions with the test database."""
         results = {}
 
@@ -263,7 +263,7 @@ class DatabaseTestSuite:
 
         return results
 
-    def test_migration_system(self) -> Dict[str, Any]:
+    def test_migration_system(self) -> dict[str, Any]:
         """Test migration system functionality."""
         results = {}
 
@@ -291,7 +291,7 @@ class DatabaseTestSuite:
 
         return results
 
-    def run_comprehensive_test_suite(self) -> Dict[str, Any]:
+    def run_comprehensive_test_suite(self) -> dict[str, Any]:
         """Run all tests and return comprehensive results."""
         print("Starting comprehensive database test suite...")
 
@@ -329,7 +329,7 @@ class DatabaseTestSuite:
         finally:
             self.cleanup_test_database()
 
-    def generate_test_report(self, results: Dict[str, Any]) -> str:
+    def generate_test_report(self, results: dict[str, Any]) -> str:
         """Generate a comprehensive test report."""
         report = []
         report.append("=" * 80)
@@ -362,7 +362,7 @@ class DatabaseTestSuite:
             single_rps = perf_results["single_inserts"].get("records_per_second", 0)
             batch_rps = perf_results["batch_inserts"].get("records_per_second", 0)
 
-            report.append(f"📊 Performance Benchmarks:")
+            report.append("📊 Performance Benchmarks:")
             report.append(f"   - Single inserts: {single_rps:.1f} records/sec")
             report.append(f"   - Batch inserts: {batch_rps:.1f} records/sec")
 
@@ -406,7 +406,7 @@ class DatabaseTestSuite:
         return "\n".join(report)
 
 
-def run_database_tests() -> Dict[str, Any]:
+def run_database_tests() -> dict[str, Any]:
     """Convenience function to run all database tests."""
     test_suite = DatabaseTestSuite()
     return test_suite.run_comprehensive_test_suite()

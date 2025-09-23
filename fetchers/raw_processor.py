@@ -535,8 +535,10 @@ def process_raw_my_picks(manager_data: dict[str, Any]) -> pd.DataFrame:
         return df
 
 
-def process_raw_gameweek_performance(live_data: dict[str, Any], gameweek: int) -> pd.DataFrame:
-    """Convert raw gameweek live data to DataFrame."""
+def process_raw_gameweek_performance(
+    live_data: dict[str, Any], gameweek: int, bootstrap_data: dict[str, Any] = None
+) -> pd.DataFrame:
+    """Convert raw gameweek live data to DataFrame with proper value population."""
     print(f"Processing gameweek {gameweek} performance data...")
 
     if not live_data or "elements" not in live_data:
@@ -547,6 +549,16 @@ def process_raw_gameweek_performance(live_data: dict[str, Any], gameweek: int) -
     if not elements:
         print("Warning: No player performance data found")
         return pd.DataFrame()
+
+    # Create a lookup for player prices from bootstrap data
+    player_prices = {}
+    player_teams = {}
+    if bootstrap_data and "elements" in bootstrap_data:
+        for player in bootstrap_data["elements"]:
+            player_id = player.get("id")
+            if player_id:
+                player_prices[player_id] = player.get("now_cost")  # Price in 0.1M units
+                player_teams[player_id] = player.get("team")
 
     processed_performances = []
     timestamp = pd.Timestamp.now(tz="UTC")
@@ -600,10 +612,10 @@ def process_raw_gameweek_performance(live_data: dict[str, Any], gameweek: int) -
             "expected_assists": str(stats.get("expected_assists", "")),
             "expected_goal_involvements": str(stats.get("expected_goal_involvements", "")),
             "expected_goals_conceded": str(stats.get("expected_goals_conceded", "")),
-            "team_id": None,  # Will need to get from bootstrap data
+            "team_id": player_teams.get(element_id),  # Get from bootstrap data
             "opponent_team": opponent_team,
             "was_home": was_home,
-            "value": stats.get("value"),
+            "value": player_prices.get(element_id),  # Get actual player price from bootstrap
             "selected": stats.get("selected"),
             "as_of_utc": timestamp,
         }
