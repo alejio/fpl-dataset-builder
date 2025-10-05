@@ -539,3 +539,51 @@ class RawPlayerGameweekPerformance(Base):
 
     # Metadata
     as_of_utc: Mapped[datetime] = mapped_column(DateTime, index=True)
+
+
+class RawPlayerGameweekSnapshot(Base):
+    """Player state snapshot per gameweek for historical availability tracking.
+
+    This table captures player availability, injury status, and news at the time
+    of each gameweek. Unlike RawPlayerBootstrap which gets replaced on each run,
+    this is APPEND-ONLY to preserve historical state.
+
+    Use case: Enables accurate recomputation of historical expected points by
+    knowing which players were actually available/injured at each gameweek.
+    """
+
+    __tablename__ = "raw_player_gameweek_snapshot"
+
+    # Primary key - composite of player and gameweek
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    player_id: Mapped[int] = mapped_column(Integer, index=True, nullable=False)
+    gameweek: Mapped[int] = mapped_column(Integer, index=True, nullable=False)
+
+    # Ensure uniqueness per player per gameweek (APPEND-ONLY, no duplicates)
+    __table_args__ = (UniqueConstraint("player_id", "gameweek", name="uq_player_gameweek_snapshot"),)
+
+    # Availability status fields (from bootstrap-static at time of snapshot)
+    status: Mapped[str] = mapped_column(String(1), index=True)  # a, i, s, u, d, n
+    chance_of_playing_next_round: Mapped[float | None] = mapped_column(Float, nullable=True)
+    chance_of_playing_this_round: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Injury/suspension news
+    news: Mapped[str] = mapped_column(Text)
+    news_added: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    # Price at snapshot time (for validation/reference)
+    now_cost: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Price in 0.1M units
+
+    # Expected points at snapshot time (optional, useful for analysis)
+    ep_this: Mapped[str | None] = mapped_column(String(10), nullable=True)  # Expected points this GW
+    ep_next: Mapped[str | None] = mapped_column(String(10), nullable=True)  # Expected points next GW
+
+    # Form at snapshot time
+    form: Mapped[str | None] = mapped_column(String(10), nullable=True)
+
+    # Backfill flag to distinguish real captures from inferred data
+    is_backfilled: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+
+    # Metadata - when snapshot was captured
+    snapshot_date: Mapped[datetime] = mapped_column(DateTime, index=True)
+    as_of_utc: Mapped[datetime] = mapped_column(DateTime, index=True)

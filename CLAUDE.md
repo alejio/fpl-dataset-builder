@@ -32,6 +32,22 @@ uv run main.py --help
 uv run main.py main --help
 ```
 
+### Player snapshot commands
+```bash
+# Capture player availability snapshot for current gameweek
+uv run main.py snapshot
+
+# Capture snapshot for specific gameweek
+uv run main.py snapshot --gameweek 8
+
+# Force overwrite existing snapshot
+uv run main.py snapshot --gameweek 8 --force
+
+# Example: Capture snapshots before each gameweek deadline
+# (run this before GW deadline to preserve historical availability state)
+uv run main.py snapshot
+```
+
 ### Data safety commands
 ```bash
 # Create manual backup of critical files
@@ -101,6 +117,12 @@ uv run main.py safety summary
 uv run ruff check .
 uv run ruff format .
 
+# Run tests
+uv run pytest                          # Run all tests
+uv run pytest tests/test_snapshot_pytest.py  # Run snapshot tests only
+uv run pytest -v                       # Verbose output
+uv run pytest --cov                    # With coverage report
+
 # Test data validation
 uv run main.py safety validate
 ```
@@ -141,6 +163,7 @@ This is a synchronous Python application that captures complete FPL API data and
 ### Core features:
 - **Raw-First Architecture**: Complete FPL API capture with 100% field coverage
 - **Gameweek Historical Data**: Stores player performance for every gameweek for historical analysis
+- **Player Availability Snapshots**: APPEND-ONLY snapshots of player state (injuries, news) per gameweek for accurate historical analysis
 - **Duplicate Prevention**: Database unique constraints prevent duplicate gameweek records
 - **Backfill Capability**: Dedicated script to capture missing historical gameweek data
 - **Derived Analytics**: Advanced metrics and insights processed from raw data
@@ -178,12 +201,13 @@ This is a synchronous Python application that captures complete FPL API data and
 ### Output structure:
 Raw+Derived database-only architecture with SQLite database at `data/fpl_data.db`:
 
-- **Raw Data**: Complete FPL API capture (10+ tables with 100% field coverage)
+- **Raw Data**: Complete FPL API capture (11+ tables with 100% field coverage)
   - `raw_players_bootstrap`, `raw_teams_bootstrap`, `raw_events_bootstrap`
   - `raw_game_settings`, `raw_element_stats`, `raw_element_types`
   - `raw_chips`, `raw_phases`, `raw_fixtures`
   - `raw_my_manager`, `raw_my_picks` (historical personal manager data)
   - `raw_player_gameweek_performance` (gameweek-by-gameweek player performance)
+  - `raw_player_gameweek_snapshot` (APPEND-ONLY player availability snapshots per gameweek)
 - **Derived Analytics**: Advanced metrics and insights (5 tables)
   - `derived_player_metrics`, `derived_team_form`, `derived_fixture_difficulty`
   - `derived_value_analysis`, `derived_ownership_trends`
@@ -273,6 +297,33 @@ high_transfers = enhanced_players.nlargest(5, 'transfers_in_event')
 print(f"Enhanced player data: {enhanced_players.shape[1]} curated ML features")
 print(f"Primary penalty takers: {len(penalty_takers)}")
 print(f"Players with injury risk: {len(injury_risks)}")
+```
+
+**Player Availability Snapshots (NEW - Historical Injury/Availability Tracking):**
+```python
+client = FPLDataClient()
+
+# Get player availability snapshot for specific gameweek
+snapshot = client.get_player_availability_snapshot(gameweek=8)
+
+# Find injured players at time of GW8
+injured = snapshot[snapshot['status'] == 'i']
+print(f"Injured players at GW8: {len(injured)}")
+
+# Get players with low chance of playing
+risky = snapshot[snapshot['chance_of_playing_next_round'] < 50]
+print(f"Players with <50% chance: {len(risky)}")
+
+# Get snapshot history across multiple gameweeks
+history = client.get_player_snapshots_history(start_gw=1, end_gw=10)
+
+# Analyze specific player's availability over time
+player_snapshots = client.get_player_snapshots_history(start_gw=1, end_gw=10, player_id=123)
+injury_history = player_snapshots[player_snapshots['status'] != 'a']
+print(f"Player 123 injury history: {len(injury_history)} gameweeks affected")
+
+# Only get real captures (exclude backfilled data)
+real_snapshots = client.get_player_availability_snapshot(gameweek=8, include_backfilled=False)
 ```
 
 **Derived Analytics Access:**
@@ -459,10 +510,14 @@ All methods are accessed through the `FPLDataClient` class:
 - `get_my_manager_data()` - Personal manager information (single row)
 - `get_my_current_picks()` - Current gameweek team selection
 
-**Gameweek Historical Data (NEW - for historical analysis):**
+**Gameweek Historical Data (for historical analysis):**
 - `get_player_gameweek_history(player_id, start_gw, end_gw)` - Historical gameweek performance for players
 - `get_my_picks_history(start_gw, end_gw)` - Historical team selections across gameweeks
 - `get_gameweek_performance(gameweek)` - All players' performance for specific gameweek
+
+**Player Availability Snapshots (NEW - Historical Injury/Status Tracking):**
+- `get_player_availability_snapshot(gameweek, include_backfilled)` - Player availability state for specific gameweek
+- `get_player_snapshots_history(start_gw, end_gw, player_id, include_backfilled)` - Availability snapshots across multiple gameweeks
 
 ### Gameweek Performance Data Schema
 
@@ -501,9 +556,46 @@ consistency = player_history['total_points'].std()
 avg_performance = player_history['total_points'].mean()
 ```
 
+### Player Availability Snapshot Data Schema
+
+The `raw_player_gameweek_snapshot` table captures player state per gameweek for historical availability tracking:
+
+**Availability Status:**
+- `player_id` - FPL player ID
+- `gameweek` - Gameweek number (1-38)
+- `status` - Availability status (a=available, i=injured, s=suspended, u=unavailable, d=doubtful, n=not in squad)
+- `chance_of_playing_next_round` - Percentage chance (0-100)
+- `chance_of_playing_this_round` - Percentage chance (0-100)
+- `news` - Injury/suspension details text
+- `news_added` - Timestamp when news was published
+
+**Additional Context:**
+- `now_cost` - Player price at snapshot time (in 0.1M units)
+- `ep_this`, `ep_next` - Expected points from FPL API
+- `form` - Form rating at snapshot time
+- `is_backfilled` - Boolean flag (False=real capture, True=inferred)
+- `snapshot_date` - When snapshot was captured
+- `as_of_utc` - Metadata timestamp
+
+**Usage:**
+```python
+# Get snapshot for specific gameweek
+snapshot = client.get_player_availability_snapshot(gameweek=8)
+print(f"Fields: {list(snapshot.columns)}")
+
+# Find injured players
+injured = snapshot[snapshot['status'] == 'i']
+print(f"Injured players: {len(injured)}")
+
+# Analyze availability over time
+history = client.get_player_snapshots_history(start_gw=1, end_gw=10, player_id=123)
+injury_count = len(history[history['status'] != 'a'])
+```
+
 ### Architecture Benefits
 - **Complete API Capture**: 100% field coverage of FPL API data
 - **Raw-First Approach**: Preserves all original data for maximum flexibility
+- **Historical Snapshots**: APPEND-ONLY availability tracking for accurate recomputation
 - **Derived Analytics**: Advanced insights processed from raw data
 - **Database Performance**: Fast queries with automatic indexing
 - **Zero Configuration**: Works out of the box with automatic table creation

@@ -250,6 +250,8 @@ class DatabaseTestSuite:
                 "get_raw_players_bootstrap",
                 "get_derived_player_metrics",
                 "get_database_summary",
+                "get_player_availability_snapshot",
+                "get_player_snapshots_history",
             ]
 
             for method_name in methods_to_test:
@@ -260,6 +262,88 @@ class DatabaseTestSuite:
 
         except Exception as e:
             results["client_error"] = str(e)
+
+        return results
+
+    def test_snapshot_operations(self) -> dict[str, Any]:
+        """Test player availability snapshot operations."""
+        results = {}
+
+        try:
+            import pandas as pd
+
+            from db.operations import DatabaseOperations
+
+            db_ops = DatabaseOperations()
+
+            # Create test snapshot data
+            test_snapshots = pd.DataFrame(
+                {
+                    "player_id": [1, 2, 3],
+                    "gameweek": [1, 1, 1],
+                    "status": ["a", "i", "a"],
+                    "chance_of_playing_next_round": [100.0, 50.0, 100.0],
+                    "chance_of_playing_this_round": [100.0, 25.0, 100.0],
+                    "news": ["", "Knee injury - 50% chance of playing", ""],
+                    "news_added": [None, datetime.now(), None],
+                    "now_cost": [50, 80, 65],
+                    "ep_this": ["4.5", "6.2", "5.1"],
+                    "ep_next": ["4.3", "0.0", "5.0"],
+                    "form": ["3.5", "5.2", "4.1"],
+                    "is_backfilled": [False, False, False],
+                    "snapshot_date": [datetime.now(), datetime.now(), datetime.now()],
+                    "as_of_utc": [datetime.now(), datetime.now(), datetime.now()],
+                }
+            )
+
+            # Test save operation
+            start_time = time.time()
+            db_ops.save_raw_player_gameweek_snapshot(test_snapshots)
+            save_duration = time.time() - start_time
+            results["save_operation"] = {
+                "success": True,
+                "duration": save_duration,
+                "records_saved": len(test_snapshots),
+            }
+
+            # Test get specific gameweek
+            start_time = time.time()
+            retrieved = db_ops.get_raw_player_gameweek_snapshot(gameweek=1)
+            get_duration = time.time() - start_time
+            results["get_gameweek"] = {
+                "success": len(retrieved) == 3,
+                "duration": get_duration,
+                "records_retrieved": len(retrieved),
+            }
+
+            # Test get specific player
+            player_snapshot = db_ops.get_raw_player_gameweek_snapshot(player_id=2, gameweek=1)
+            results["get_player_snapshot"] = {
+                "success": len(player_snapshot) == 1,
+                "player_status": player_snapshot["status"].iloc[0] if len(player_snapshot) > 0 else None,
+            }
+
+            # Test get range
+            range_data = db_ops.get_player_snapshots_range(start_gw=1, end_gw=1)
+            results["get_range"] = {"success": len(range_data) == 3, "records_retrieved": len(range_data)}
+
+            # Test duplicate prevention
+            try:
+                db_ops.save_raw_player_gameweek_snapshot(test_snapshots)
+                results["duplicate_prevention"] = False  # Should have failed
+            except Exception:
+                results["duplicate_prevention"] = True  # Expected behavior
+
+            # Test backfilled filtering
+            real_only = db_ops.get_raw_player_gameweek_snapshot(gameweek=1, include_backfilled=False)
+            results["backfilled_filter"] = {
+                "success": len(real_only) == 3,
+                "all_real": all(~real_only["is_backfilled"]) if len(real_only) > 0 else True,
+            }
+
+        except Exception as e:
+            results["error"] = str(e)
+            results["success"] = False
 
         return results
 
@@ -320,6 +404,11 @@ class DatabaseTestSuite:
 
             # Migration system tests
             all_results["migration_tests"] = self.test_migration_system()
+
+            # Snapshot operation tests
+            all_results["snapshot_tests"] = self.benchmark_operation(
+                "snapshot_operations", self.test_snapshot_operations
+            )
 
             # Overall benchmark summary
             all_results["benchmark_summary"] = self.benchmark_results

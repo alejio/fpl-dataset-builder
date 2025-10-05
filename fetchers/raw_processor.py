@@ -20,6 +20,7 @@ from validation.raw_schemas import (
     RawFixturesSchema,
     RawGameSettingsSchema,
     RawPhasesSchema,
+    RawPlayerGameweekSnapshotSchema,
     RawPlayersBootstrapSchema,
     RawTeamsBootstrapSchema,
 )
@@ -628,4 +629,83 @@ def process_raw_gameweek_performance(
         return df
     except Exception as e:
         print(f"❌ Gameweek performance validation failed: {str(e)[:200]}")
+        return df
+
+
+def process_player_gameweek_snapshot(
+    bootstrap_data: dict[str, Any], gameweek: int, is_backfilled: bool = False
+) -> pd.DataFrame:
+    """Convert raw FPL player data to gameweek snapshot DataFrame.
+
+    Captures player availability, injury status, and news at the time of snapshot
+    for historical tracking and accurate recomputation of expected points.
+
+    Args:
+        bootstrap_data: Raw bootstrap response from FPL API
+        gameweek: Gameweek number for this snapshot
+        is_backfilled: Whether this is inferred/backfilled data vs real capture
+
+    Returns:
+        DataFrame with player snapshot data validated against schema
+    """
+    print(f"Processing player snapshot for GW{gameweek}...")
+
+    players = bootstrap_data.get("elements", [])
+    if not players:
+        print("Warning: No player data found in bootstrap")
+        return pd.DataFrame()
+
+    # Process each player, capturing only snapshot-relevant fields
+    processed_snapshots = []
+    timestamp = pd.Timestamp.now(tz="UTC")
+
+    for player in players:
+        snapshot = {
+            # Primary keys
+            "player_id": player["id"],
+            "gameweek": gameweek,
+            # Availability status
+            "status": player.get("status", "a"),
+            "chance_of_playing_next_round": player.get("chance_of_playing_next_round"),
+            "chance_of_playing_this_round": player.get("chance_of_playing_this_round"),
+            # Injury/suspension news
+            "news": player.get("news", ""),
+            "news_added": player.get("news_added"),
+            # Price at snapshot time
+            "now_cost": player.get("now_cost"),
+            # Expected points at snapshot time
+            "ep_this": player.get("ep_this", "0.0"),
+            "ep_next": player.get("ep_next", "0.0"),
+            # Form at snapshot time
+            "form": player.get("form", "0.0"),
+            # Backfill flag
+            "is_backfilled": is_backfilled,
+            # Metadata
+            "snapshot_date": timestamp,
+            "as_of_utc": timestamp,
+        }
+        processed_snapshots.append(snapshot)
+
+    df = pd.DataFrame(processed_snapshots)
+
+    # Clean data before validation
+    print("🧹 Cleaning snapshot data...")
+
+    # Handle None/null values in news field (convert to empty string)
+    if "news" in df.columns:
+        df["news"] = df["news"].fillna("")
+
+    # Handle ep_this and ep_next (convert None to "0.0")
+    for col in ["ep_this", "ep_next", "form"]:
+        if col in df.columns:
+            df[col] = df[col].fillna("0.0")
+
+    # Validate against schema
+    try:
+        validated_df = RawPlayerGameweekSnapshotSchema.validate(df)
+        print(f"✅ Snapshot validation successful - {len(validated_df)} player snapshots for GW{gameweek}")
+        return validated_df
+    except Exception as e:
+        print(f"❌ Snapshot validation failed: {str(e)[:200]}")
+        print("Returning unvalidated DataFrame")
         return df

@@ -348,6 +348,92 @@ class DatabaseOperations:
             query_result = query.all()
             return model_to_dataframe(models_raw.RawPlayerGameweekPerformance, query_result)
 
+    def save_raw_player_gameweek_snapshot(self, df: pd.DataFrame, force: bool = False) -> None:
+        """Save raw player gameweek snapshot DataFrame to database.
+
+        This is APPEND-ONLY - we never delete existing snapshots to preserve historical state.
+        Duplicates are prevented by the unique constraint on (player_id, gameweek).
+
+        Args:
+            df: DataFrame with snapshot data
+            force: If True, delete existing snapshots for this gameweek first (use with caution)
+        """
+        with next(get_session()) as session:
+            # Optional: force overwrite for specific gameweek
+            if force and not df.empty and "gameweek" in df.columns:
+                gameweek = int(df["gameweek"].iloc[0])
+                deleted_count = (
+                    session.query(models_raw.RawPlayerGameweekSnapshot)
+                    .filter(models_raw.RawPlayerGameweekSnapshot.gameweek == gameweek)
+                    .delete()
+                )
+                session.flush()
+                print(f"  🗑️ Force mode: Deleted {deleted_count} existing snapshot records for GW{gameweek}")
+
+            df_converted = convert_datetime_columns(df, ["as_of_utc", "snapshot_date", "news_added"])
+            records = df_converted.to_dict("records")
+
+            try:
+                session.bulk_insert_mappings(models_raw.RawPlayerGameweekSnapshot, records)
+                session.commit()
+            except Exception as e:
+                # If duplicate key error, provide helpful message
+                if "UNIQUE constraint failed" in str(e) or "IntegrityError" in str(type(e).__name__):
+                    gameweek = int(df["gameweek"].iloc[0]) if not df.empty and "gameweek" in df.columns else "unknown"
+                    print(
+                        f"  ⚠️ Snapshot already exists for GW{gameweek}. Use force=True to overwrite or skip if intended."
+                    )
+                raise
+
+    def get_raw_player_gameweek_snapshot(
+        self, gameweek: int = None, player_id: int = None, include_backfilled: bool = True
+    ) -> pd.DataFrame:
+        """Get raw player gameweek snapshot data as DataFrame.
+
+        Args:
+            gameweek: Filter to specific gameweek (None = all gameweeks)
+            player_id: Filter to specific player (None = all players)
+            include_backfilled: If False, exclude backfilled records (only real captures)
+
+        Returns:
+            DataFrame with snapshot data
+        """
+        with next(get_session()) as session:
+            query = session.query(models_raw.RawPlayerGameweekSnapshot)
+
+            if gameweek is not None:
+                query = query.filter(models_raw.RawPlayerGameweekSnapshot.gameweek == gameweek)
+            if player_id is not None:
+                query = query.filter(models_raw.RawPlayerGameweekSnapshot.player_id == player_id)
+            if not include_backfilled:
+                query = query.filter(~models_raw.RawPlayerGameweekSnapshot.is_backfilled)
+
+            query_result = query.all()
+            return model_to_dataframe(models_raw.RawPlayerGameweekSnapshot, query_result)
+
+    def get_player_snapshots_range(self, start_gw: int, end_gw: int, include_backfilled: bool = True) -> pd.DataFrame:
+        """Get player snapshots for a range of gameweeks.
+
+        Args:
+            start_gw: Starting gameweek (inclusive)
+            end_gw: Ending gameweek (inclusive)
+            include_backfilled: If False, exclude backfilled records
+
+        Returns:
+            DataFrame with snapshot data for all players across gameweek range
+        """
+        with next(get_session()) as session:
+            query = session.query(models_raw.RawPlayerGameweekSnapshot).filter(
+                models_raw.RawPlayerGameweekSnapshot.gameweek >= start_gw,
+                models_raw.RawPlayerGameweekSnapshot.gameweek <= end_gw,
+            )
+
+            if not include_backfilled:
+                query = query.filter(~models_raw.RawPlayerGameweekSnapshot.is_backfilled)
+
+            query_result = query.all()
+            return model_to_dataframe(models_raw.RawPlayerGameweekSnapshot, query_result)
+
     # Legacy compatibility adapter functions
     def get_players_current(self) -> pd.DataFrame:
         """Get current players data in legacy normalized format.

@@ -451,3 +451,45 @@ class RawFixturesSchema(pa.DataFrameModel):
 
     class Config:
         coerce = True
+
+
+class RawPlayerGameweekSnapshotSchema(pa.DataFrameModel):
+    """Player availability snapshot per gameweek for historical tracking.
+
+    Captures player state (availability, injuries, news) at each gameweek.
+    This is APPEND-ONLY to preserve historical state for accurate recomputation
+    of expected points and availability analysis.
+    """
+
+    # Primary keys
+    player_id: Series[int] = pa.Field(ge=1, le=705)
+    gameweek: Series[int] = pa.Field(ge=1, le=38)
+
+    # Availability status fields (from bootstrap-static at time of snapshot)
+    status: Series[str] = pa.Field(isin=["a", "i", "s", "u", "d", "n"])
+    chance_of_playing_next_round: Series[pd.Float64Dtype] = pa.Field(nullable=True, ge=0, le=100)
+    chance_of_playing_this_round: Series[pd.Float64Dtype] = pa.Field(nullable=True, ge=0, le=100)
+
+    # Injury/suspension news
+    news: Series[str] = pa.Field(str_length={"min_value": 0})
+    news_added: Series[pd.Timestamp] = pa.Field(nullable=True)
+
+    # Price at snapshot time (for validation/reference)
+    now_cost: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=35, le=150)  # API stores as 10x actual price
+
+    # Expected points at snapshot time (optional, useful for analysis)
+    ep_this: Series[str] = pa.Field(str_length={"min_value": 0}, nullable=True)
+    ep_next: Series[str] = pa.Field(str_length={"min_value": 0}, nullable=True)
+
+    # Form at snapshot time
+    form: Series[str] = pa.Field(str_length={"min_value": 0}, nullable=True)
+
+    # Backfill flag to distinguish real captures from inferred data
+    is_backfilled: Series[bool]
+
+    # Metadata - when snapshot was captured
+    snapshot_date: Series[pd.Timestamp]
+    as_of_utc: Series[pd.Timestamp]
+
+    class Config:
+        coerce = True

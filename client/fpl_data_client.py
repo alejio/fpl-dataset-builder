@@ -277,6 +277,79 @@ class FPLDataClient:
         except Exception as e:
             raise RuntimeError(f"Failed to fetch gameweek {gameweek} performance: {e}") from e
 
+    # Player snapshot methods (NEW - historical availability tracking)
+    def get_player_availability_snapshot(self, gameweek: int, include_backfilled: bool = True) -> pd.DataFrame:
+        """Get player availability snapshot for a specific gameweek.
+
+        This provides historical player state (injuries, availability, news) as it was
+        at the time of the specified gameweek, enabling accurate recomputation of
+        historical expected points.
+
+        Args:
+            gameweek: Gameweek number to get snapshot for
+            include_backfilled: If False, exclude inferred/backfilled data (only real captures)
+
+        Returns:
+            DataFrame with player availability state for the gameweek, including:
+            - status: Availability status (a=available, i=injured, s=suspended, etc.)
+            - chance_of_playing_next_round: Percentage chance of playing
+            - chance_of_playing_this_round: Percentage chance of playing
+            - news: Injury/suspension details
+            - news_added: When news was published
+            - now_cost: Player price at snapshot time
+            - ep_this, ep_next: Expected points from FPL API
+            - form: Form rating at snapshot time
+            - is_backfilled: Whether this is real data or inferred
+
+        Example:
+            >>> client = FPLDataClient()
+            >>> snapshot = client.get_player_availability_snapshot(gameweek=8)
+            >>> injured = snapshot[snapshot['status'] == 'i']  # Get injured players
+        """
+        try:
+            return db_ops.get_raw_player_gameweek_snapshot(gameweek=gameweek, include_backfilled=include_backfilled)
+        except Exception as e:
+            raise RuntimeError(f"Failed to fetch availability snapshot for GW{gameweek}: {e}") from e
+
+    def get_player_snapshots_history(
+        self, start_gw: int, end_gw: int, player_id: int = None, include_backfilled: bool = True
+    ) -> pd.DataFrame:
+        """Get player availability snapshots across multiple gameweeks.
+
+        Useful for analyzing injury trends, availability patterns, and historical
+        player state for accurate modeling.
+
+        Args:
+            start_gw: Starting gameweek (inclusive)
+            end_gw: Ending gameweek (inclusive)
+            player_id: Optional filter for specific player (None = all players)
+            include_backfilled: If False, exclude inferred/backfilled data
+
+        Returns:
+            DataFrame with player snapshots across gameweek range
+
+        Example:
+            >>> client = FPLDataClient()
+            >>> # Get all snapshots for GW1-10
+            >>> snapshots = client.get_player_snapshots_history(start_gw=1, end_gw=10)
+            >>> # Get snapshots for specific player
+            >>> player_history = client.get_player_snapshots_history(
+            ...     start_gw=1, end_gw=10, player_id=123
+            ... )
+        """
+        try:
+            df = db_ops.get_player_snapshots_range(
+                start_gw=start_gw, end_gw=end_gw, include_backfilled=include_backfilled
+            )
+
+            # Filter by player_id if specified
+            if player_id is not None and not df.empty:
+                df = df[df["player_id"] == player_id]
+
+            return df.sort_values(["player_id", "gameweek"]) if not df.empty else df
+        except Exception as e:
+            raise RuntimeError(f"Failed to fetch snapshots history (GW{start_gw}-{end_gw}): {e}") from e
+
     def get_players_enhanced(self) -> pd.DataFrame:
         """Get current players with enhanced ML-valuable features.
 
@@ -310,6 +383,7 @@ class FPLDataClient:
                 "selected_by_percent",
                 "minutes",
                 "starts",
+                "status",  # Availability status (a=available, i=injured, s=suspended, u=unavailable, d=doubtful, n=not in squad)
             ]
 
             # Priority ML-valuable features (14 key features)
@@ -415,6 +489,80 @@ class FPLDataClient:
 
         except Exception as e:
             raise RuntimeError(f"Failed to fetch enhanced players data: {e}") from e
+
+    def get_player_status(self, player_name: str) -> dict:
+        """Get detailed status information for a specific player.
+
+        Args:
+            player_name: Player's web name (e.g., "Ekitiké", "Salah")
+
+        Returns:
+            Dictionary with player status details including availability, news, and decoded status
+        """
+        try:
+            players = self.get_players_enhanced()
+
+            # Search for player (case insensitive, handle accented characters)
+            # First try exact case-insensitive match
+            player_match = players[players["web_name"].str.contains(player_name, case=False, na=False)]
+
+            # If not found, try removing accents from both search and data
+            if player_match.empty:
+                import unicodedata
+
+                def remove_accents(text):
+                    return "".join(c for c in unicodedata.normalize("NFD", text) if unicodedata.category(c) != "Mn")
+
+                # Normalize the search term
+                normalized_search = remove_accents(player_name.lower())
+
+                # Create a normalized version of web_name for comparison
+                players_normalized = players.copy()
+                players_normalized["web_name_normalized"] = players["web_name"].apply(
+                    lambda x: remove_accents(x.lower())
+                )
+
+                # Search in normalized names
+                player_match = players_normalized[
+                    players_normalized["web_name_normalized"].str.contains(normalized_search, na=False)
+                ]
+
+            if player_match.empty:
+                return {"error": f"Player '{player_name}' not found"}
+
+            player = player_match.iloc[0]
+
+            # Status code meanings
+            status_meanings = {
+                "a": "Available",
+                "i": "Injured",
+                "s": "Suspended",
+                "u": "Unavailable",
+                "d": "Doubtful",
+                "n": "Not in squad",
+            }
+
+            return {
+                "player_id": int(player["player_id"]),
+                "name": player["web_name"],
+                "full_name": f"{player['first_name']} {player['second_name']}",
+                "status_code": player["status"],
+                "status_meaning": status_meanings.get(player["status"], f"Unknown: {player['status']}"),
+                "chance_next_round": float(player["chance_of_playing_next_round"])
+                if pd.notna(player["chance_of_playing_next_round"])
+                else None,
+                "chance_this_round": float(player["chance_of_playing_this_round"])
+                if pd.notna(player["chance_of_playing_this_round"])
+                else None,
+                "news": player["news"],
+                "team_id": int(player["team_id"]),
+                "position_id": int(player["position_id"]),
+                "current_price": float(player["now_cost"]) / 10,  # Convert to actual price
+                "total_points": int(player["total_points"]),
+            }
+
+        except Exception as e:
+            raise RuntimeError(f"Failed to get player status for '{player_name}': {e}") from e
 
     # Legacy compatibility methods (transform raw data to legacy format)
     def get_current_players(self) -> pd.DataFrame:

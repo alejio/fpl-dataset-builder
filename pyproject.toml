@@ -54,4 +54,17 @@ known-first-party = ["fpl_dataset_builder"]
 dev = [
     "ruff>=0.12.7",
     "pre-commit>=3.5.0",
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*", "*Tests", "*TestSuite"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--tb=short",
 ]

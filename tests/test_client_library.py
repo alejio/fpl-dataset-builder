@@ -171,7 +171,7 @@ class ClientLibraryTests:
         manager_functions = [
             ("get_my_manager_data", self.client.get_my_manager_data),
             ("get_my_current_picks", self.client.get_my_current_picks),
-            ("get_my_gameweek_history", self.client.get_my_gameweek_history),
+            ("get_my_picks_history", lambda: self.client.get_my_picks_history()),
         ]
 
         for func_name, func in manager_functions:
@@ -243,6 +243,53 @@ class ClientLibraryTests:
 
         return {name: result for name, result in self.test_results.items() if name in [f[0] for f in query_functions]}
 
+    def test_snapshot_functions(self) -> dict[str, Any]:
+        """Test player availability snapshot functions."""
+        print("Testing snapshot functions...")
+
+        # Test get_player_availability_snapshot
+        print("  Testing get_player_availability_snapshot...")
+        self.test_function(
+            "get_player_availability_snapshot",
+            lambda: self.client.get_player_availability_snapshot(gameweek=1),
+            should_have_data=False,  # May not have data yet
+        )
+
+        # Test get_player_snapshots_history
+        print("  Testing get_player_snapshots_history...")
+        self.test_function(
+            "get_player_snapshots_history",
+            lambda: self.client.get_player_snapshots_history(start_gw=1, end_gw=2),
+            should_have_data=False,  # May not have data yet
+        )
+
+        # Test snapshot filtering (if data exists)
+        try:
+            snapshot = self.client.get_player_availability_snapshot(gameweek=1, include_backfilled=False)
+            if not snapshot.empty:
+                # Test data structure
+                expected_cols = [
+                    "player_id",
+                    "gameweek",
+                    "status",
+                    "chance_of_playing_next_round",
+                    "news",
+                    "is_backfilled",
+                    "snapshot_date",
+                ]
+                has_expected_cols = all(col in snapshot.columns for col in expected_cols)
+
+                self.test_results["snapshot_data_structure"] = {
+                    "success": True,
+                    "has_expected_columns": has_expected_cols,
+                    "actual_columns": list(snapshot.columns),
+                    "row_count": len(snapshot),
+                }
+        except Exception as e:
+            self.test_results["snapshot_data_structure"] = {"success": False, "error": str(e)}
+
+        return {name: result for name, result in self.test_results.items() if "snapshot" in name}
+
     def run_comprehensive_tests(self) -> dict[str, Any]:
         """Run all client library tests."""
         print("Running comprehensive client library tests...")
@@ -260,6 +307,7 @@ class ClientLibraryTests:
         all_results["manager_data_tests"] = self.test_manager_data_functions()
         all_results["utility_tests"] = self.test_utility_functions()
         all_results["query_tests"] = self.test_query_functions()
+        all_results["snapshot_tests"] = self.test_snapshot_functions()
 
         # Overall test summary
         total_tests = len(self.test_results)

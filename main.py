@@ -191,5 +191,83 @@ def main(
     )
 
 
+@app.command()
+def snapshot(
+    gameweek: int = typer.Option(None, help="Gameweek number to snapshot (defaults to current)"),
+    force: bool = typer.Option(False, help="Force overwrite if snapshot already exists"),
+):
+    """Capture player availability snapshot for a specific gameweek.
+
+    This captures player state (injuries, availability, news) at the current time
+    for the specified gameweek, enabling accurate recomputation of historical
+    expected points.
+
+    Example usage:
+        uv run main.py snapshot                    # Snapshot current gameweek
+        uv run main.py snapshot --gameweek 8       # Snapshot specific gameweek
+        uv run main.py snapshot --force            # Overwrite existing snapshot
+    """
+    from db.operations import DatabaseOperations
+    from fetchers.raw_processor import process_player_gameweek_snapshot
+
+    typer.echo("📸 FPL Player Availability Snapshot")
+    typer.echo()
+
+    # Initialize database
+    typer.echo("🗄️ Initializing database...")
+    initialize_database()
+    typer.echo("✅ Database ready")
+    typer.echo()
+
+    # Fetch current bootstrap data
+    typer.echo("📥 Fetching current player data from FPL API...")
+    bootstrap = fetch_fpl_bootstrap()
+
+    # Determine gameweek
+    if gameweek is None:
+        current_gw = get_current_gameweek(bootstrap)
+        if current_gw is None:
+            typer.echo("❌ Could not determine current gameweek")
+            raise typer.Exit(1)
+        gameweek = current_gw
+        typer.echo(f"ℹ️  Using current gameweek: GW{gameweek}")
+    else:
+        typer.echo(f"ℹ️  Capturing snapshot for GW{gameweek}")
+    typer.echo()
+
+    # Process snapshot
+    typer.echo(f"📸 Processing player snapshot for GW{gameweek}...")
+    snapshot_df = process_player_gameweek_snapshot(bootstrap, gameweek=gameweek, is_backfilled=False)
+
+    if snapshot_df.empty:
+        typer.echo("❌ Failed to process snapshot data")
+        raise typer.Exit(1)
+
+    typer.echo(f"✅ Processed {len(snapshot_df)} player snapshots")
+    typer.echo()
+
+    # Save to database
+    typer.echo("💾 Saving snapshot to database...")
+    db_ops = DatabaseOperations()
+    try:
+        db_ops.save_raw_player_gameweek_snapshot(snapshot_df, force=force)
+        typer.echo(f"✅ Snapshot saved successfully for GW{gameweek}")
+    except Exception as e:
+        if "UNIQUE constraint failed" in str(e) or "already exists" in str(e):
+            typer.echo(f"⚠️  Snapshot already exists for GW{gameweek}")
+            typer.echo("   Use --force to overwrite existing snapshot")
+            raise typer.Exit(1) from None
+        else:
+            typer.echo(f"❌ Failed to save snapshot: {str(e)[:200]}")
+            raise typer.Exit(1) from e
+
+    typer.echo()
+    typer.echo("🎉 Snapshot capture completed successfully!")
+    typer.echo(f"✅ Player availability state captured for GW{gameweek}")
+    typer.echo(
+        f"📊 Access snapshot: uv run python -c \"from client.fpl_data_client import FPLDataClient; client=FPLDataClient(); snapshot=client.get_player_availability_snapshot({gameweek}); print(f'Snapshot: {{len(snapshot)}} players')\""
+    )
+
+
 if __name__ == "__main__":
     app()
