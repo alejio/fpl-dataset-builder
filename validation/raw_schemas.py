@@ -462,7 +462,7 @@ class RawPlayerGameweekSnapshotSchema(pa.DataFrameModel):
     """
 
     # Primary keys
-    player_id: Series[int] = pa.Field(ge=1, le=705)
+    player_id: Series[int] = pa.Field(ge=1, le=800)  # Increased from 705 to accommodate squad size changes
     gameweek: Series[int] = pa.Field(ge=1, le=38)
 
     # Availability status fields (from bootstrap-static at time of snapshot)

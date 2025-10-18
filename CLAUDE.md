@@ -48,6 +48,7 @@ uv run main.py snapshot --gameweek 8 --force
 uv run main.py snapshot
 ```
 
+
 ### Data safety commands
 ```bash
 # Create manual backup of critical files
@@ -91,6 +92,30 @@ uv run python backfill_gameweeks.py --dry-run
 
 # Force overwrite existing gameweek data
 uv run python backfill_gameweeks.py --gameweek 2 --force
+```
+
+### Player snapshot backfill (vaastav historical data - GW1-6 only)
+```bash
+# Backfill all GW1-6 snapshots using real historical data
+uv run python backfill_snapshots_vaastav.py
+
+# Backfill specific gameweek (1-6 only)
+uv run python backfill_snapshots_vaastav.py --gameweek 3
+
+# Backfill range (within 1-6)
+uv run python backfill_snapshots_vaastav.py --start-gw 1 --end-gw 4
+
+# Dry run to preview what would be backfilled
+uv run python backfill_snapshots_vaastav.py --dry-run
+
+# Force overwrite existing snapshots
+uv run python backfill_snapshots_vaastav.py --force
+
+# Use different season data
+uv run python backfill_snapshots_vaastav.py --season 2024-25
+
+# Test backfilled data
+uv run python -c "from client.fpl_data_client import FPLDataClient; client=FPLDataClient(); snapshot=client.get_player_availability_snapshot(1); print(f'GW1: {len(snapshot)} snapshots, Backfilled: {snapshot[\"is_backfilled\"].sum()}')"
 ```
 
 ### Database commands
@@ -573,9 +598,25 @@ The `raw_player_gameweek_snapshot` table captures player state per gameweek for 
 - `now_cost` - Player price at snapshot time (in 0.1M units)
 - `ep_this`, `ep_next` - Expected points from FPL API
 - `form` - Form rating at snapshot time
-- `is_backfilled` - Boolean flag (False=real capture, True=inferred)
+- `is_backfilled` - Boolean flag (False=real capture, True=inferred/backfilled)
 - `snapshot_date` - When snapshot was captured
 - `as_of_utc` - Metadata timestamp
+
+**⚠️ Historical Data Limitations:**
+- The FPL API only provides **current** player status (injuries, news, etc.)
+- Historical availability data for past gameweeks is **NOT available** from the FPL API
+- **Limited backfill available** for GW1-6 using vaastav's Fantasy-Premier-League repository
+  - Vaastav updates ~3 times per season (not per-gameweek)
+  - GW1-6 use the same season-start snapshot (best available historical data)
+  - All backfilled data is marked with `is_backfilled=True`
+  - Use `backfill_snapshots_vaastav.py` to populate GW1-6
+- For GW7+, snapshots must be captured in **real-time** before each gameweek to be accurate
+- For past gameweeks without snapshots, use `raw_player_gameweek_performance.minutes` as a proxy:
+  ```python
+  # Infer availability from performance data
+  performance = client.get_gameweek_performance(gameweek=1)
+  available_players = performance[performance['minutes'] > 0]  # Played = was available
+  ```
 
 **Usage:**
 ```python
