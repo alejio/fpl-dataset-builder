@@ -4,32 +4,65 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Common Commands
 
-### Running the application
+### Running the application (Main Commands)
+
+**Full data refresh (recommended workflow):**
 ```bash
-# Basic run with auto-detected season (main command)
+# Standard run - captures new data, skips existing gameweeks
 uv run main.py main
 
-# Run with specific seasons and safety features
-uv run main.py main --last-completed-season 2024-2025 --historical-season 2023-24
+# Force refresh everything (use before next gameweek starts)
+uv run main.py main --force-refresh-gameweek
+
+# Quick price/form update only (fast, no gameweek data)
+uv run main.py main --skip-gameweek --skip-derived
+```
+
+**Quick refresh commands (NEW - faster for specific updates):**
+```bash
+# Quick bootstrap refresh only (prices, form, availability)
+# Use this before deadline to get latest prices without refetching gameweeks
+uv run main.py refresh-bootstrap
+
+# Refresh specific gameweek data
+uv run main.py refresh-gameweek               # Current gameweek
+uv run main.py refresh-gameweek --force       # Force refresh current
+uv run main.py refresh-gameweek --gameweek 7  # Specific gameweek
+
+# Refresh with different manager ID
+uv run main.py refresh-bootstrap --manager-id 12345
+uv run main.py refresh-gameweek --manager-id 12345
+```
+
+**Advanced options:**
+```bash
+# Skip gameweek fetching (only update bootstrap + derived)
+uv run main.py main --skip-gameweek
+
+# Skip derived analytics processing
+uv run main.py main --skip-derived
 
 # Run without backup/validation (faster for development)
 uv run main.py main --no-create-backup --no-validate-before
 
-# Run with external data fetching and database saving
-uv run main.py main
-
-# Run with default manager ID (4233026) for personal data tracking
-uv run main.py main
-
 # Run with different manager ID
 uv run main.py main --manager-id 12345
-
-# Run without database saving (CSV only)
-uv run main.py main --no-save-to-database
 
 # See all CLI options
 uv run main.py --help
 uv run main.py main --help
+```
+
+**Common workflows:**
+```bash
+# 1. After gameweek finishes (capture new data)
+uv run main.py main
+
+# 2. Before next gameweek starts (refresh everything)
+uv run main.py main --force-refresh-gameweek
+
+# 3. Quick price check before deadline
+uv run main.py refresh-bootstrap
 ```
 
 ### Player snapshot commands
