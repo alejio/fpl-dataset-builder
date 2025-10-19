@@ -13,12 +13,20 @@ from .database import Base
 
 
 class DerivedPlayerMetrics(Base):
-    """Advanced player metrics derived from raw FPL data."""
+    """Advanced player metrics derived from raw FPL data.
+
+    Historical table: stores player metrics per gameweek for time-series analysis.
+    """
 
     __tablename__ = "derived_player_metrics"
 
-    # Primary key and identification
-    player_id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    # Composite primary key for player_id + gameweek (historical data)
+    player_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    gameweek: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+
+    # Composite primary key
+    __table_args__ = (PrimaryKeyConstraint("player_id", "gameweek"),)
+
     web_name: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
     team_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     position_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
@@ -64,12 +72,20 @@ class DerivedPlayerMetrics(Base):
 
 
 class DerivedTeamForm(Base):
-    """Rolling team performance metrics for venue-specific analysis."""
+    """Rolling team performance metrics for venue-specific analysis.
+
+    Historical table: stores team form metrics per gameweek for trend analysis.
+    """
 
     __tablename__ = "derived_team_form"
 
-    # Primary key and identification
-    team_id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    # Composite primary key for team_id + gameweek (historical data)
+    team_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    gameweek: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+
+    # Composite primary key
+    __table_args__ = (PrimaryKeyConstraint("team_id", "gameweek"),)
+
     team_name: Mapped[str] = mapped_column(String(50), nullable=False)
     team_short_name: Mapped[str] = mapped_column(String(10), nullable=False)
 
@@ -146,12 +162,20 @@ class DerivedFixtureDifficulty(Base):
 
 
 class DerivedValueAnalysis(Base):
-    """Price-per-point analysis and value recommendations."""
+    """Price-per-point analysis and value recommendations.
+
+    Historical table: stores value analysis per player per gameweek for trend tracking.
+    """
 
     __tablename__ = "derived_value_analysis"
 
-    # Primary key and identification
-    player_id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    # Composite primary key for player_id + gameweek (historical data)
+    player_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    gameweek: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+
+    # Composite primary key
+    __table_args__ = (PrimaryKeyConstraint("player_id", "gameweek"),)
+
     web_name: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
     position_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
 
@@ -190,12 +214,20 @@ class DerivedValueAnalysis(Base):
 
 
 class DerivedOwnershipTrends(Base):
-    """Transfer momentum and ownership trend analysis."""
+    """Transfer momentum and ownership trend analysis.
+
+    Historical table: stores ownership trends per player per gameweek.
+    """
 
     __tablename__ = "derived_ownership_trends"
 
-    # Primary key and identification
-    player_id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    # Composite primary key for player_id + gameweek (historical data)
+    player_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    gameweek: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+
+    # Composite primary key
+    __table_args__ = (PrimaryKeyConstraint("player_id", "gameweek"),)
+
     web_name: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
 
     # Current ownership
@@ -221,6 +253,5 @@ class DerivedOwnershipTrends(Base):
     ownership_risk_level: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
     bandwagon_score: Mapped[float] = mapped_column(Float, nullable=False)
 
-    # Meta information
-    gameweek: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    # Meta information (gameweek moved to composite primary key above)
     last_updated: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.now)

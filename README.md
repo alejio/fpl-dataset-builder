@@ -131,9 +131,9 @@ Clean, modular architecture with focused packages:
 Creates `data/` directory with SQLite database and automatic backups:
 
 **Database Architecture:**
-- `fpl_data.db` - SQLite database with raw+derived architecture
+- `fpl_data.db` - SQLite database with raw+derived architecture (18 total tables)
 
-**Raw FPL API Data (9+ tables with 100% field coverage):**
+**Raw FPL API Data (11 tables with 100% field coverage):**
 - `raw_players_bootstrap` - Complete player data (100+ fields)
 - `raw_teams_bootstrap` - Complete team data (21+ fields)
 - `raw_events_bootstrap` - Complete gameweek/event data (29+ fields)
@@ -141,7 +141,10 @@ Creates `data/` directory with SQLite database and automatic backups:
 - `raw_element_stats`, `raw_element_types`, `raw_chips`, `raw_phases`
 - `raw_fixtures` - Complete fixture data with all FPL API fields
 - `raw_my_manager`, `raw_my_picks` - Personal manager data (historical)
+
+**Gameweek Historical Data (2 tables for player tracking):**
 - `raw_player_gameweek_performance` - Player performance per gameweek
+- `raw_player_gameweek_snapshot` - APPEND-ONLY player availability snapshots
 
 **Derived Analytics Data (5 tables with processed insights):**
 - `derived_player_metrics` - Advanced player analytics with value scores
@@ -179,12 +182,14 @@ uv run ruff format .
 
 This dataset provides comprehensive FPL data with advanced processing:
 
-- **✅ 100% API Coverage**: Complete raw FPL data capture with all fields preserved
-- **✅ Gameweek Historical Data**: Player performance stored per gameweek for analysis
+- **✅ 100% API Coverage**: Complete raw FPL data capture with all fields preserved (11 tables)
+- **✅ Gameweek Historical Data**: Player performance stored per gameweek for analysis (2 tables)
+- **✅ Player Availability Snapshots**: APPEND-ONLY historical injury/status tracking
 - **✅ Duplicate Prevention**: Database constraints prevent duplicate gameweek records
-- **✅ Derived Analytics**: Advanced metrics computed from raw data
+- **✅ Derived Analytics**: Advanced metrics computed from raw data (5 tables)
 - **✅ Data Integrity**: Comprehensive validation and backup systems
 - **✅ Database Performance**: Optimized queries with automatic indexing
+- **✅ Complete Client Access**: 30 client methods covering all 18 database tables
 
 The raw+derived architecture ensures both complete data preservation and advanced analytics capabilities.
 

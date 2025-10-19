@@ -602,19 +602,32 @@ class DatabaseOperations:
 
     # Derived data operations for analytics
     def save_derived_player_metrics(self, df: pd.DataFrame) -> None:
-        """Save derived player metrics DataFrame to database."""
-        session = self.session_factory()
-        try:
-            session.query(models_derived.DerivedPlayerMetrics).delete()
+        """Save derived player metrics DataFrame to database.
+
+        Per-gameweek update: deletes existing data for the specific gameweek
+        before inserting new data, preserving historical gameweeks.
+        """
+        with next(get_session()) as session:
+            # Check if data has gameweek column
+            if not df.empty and "gameweek" in df.columns:
+                gameweek = int(df["gameweek"].iloc[0])
+
+                # Delete existing data for this gameweek only
+                deleted_count = (
+                    session.query(models_derived.DerivedPlayerMetrics)
+                    .filter(models_derived.DerivedPlayerMetrics.gameweek == gameweek)
+                    .delete()
+                )
+
+                session.flush()
+
+                if deleted_count > 0:
+                    print(f"  🗑️ Deleted {deleted_count} existing player metrics for GW{gameweek}")
+
             df_converted = convert_datetime_columns(df, ["calculation_date"])
             records = df_converted.to_dict("records")
             session.bulk_insert_mappings(models_derived.DerivedPlayerMetrics, records)
             session.commit()
-        except Exception:
-            session.rollback()
-            raise
-        finally:
-            session.close()
 
     def get_derived_player_metrics(self) -> pd.DataFrame:
         """Get derived player metrics as DataFrame."""
@@ -623,19 +636,32 @@ class DatabaseOperations:
             return model_to_dataframe(models_derived.DerivedPlayerMetrics, query_result)
 
     def save_derived_team_form(self, df: pd.DataFrame) -> None:
-        """Save derived team form DataFrame to database."""
-        session = self.session_factory()
-        try:
-            session.query(models_derived.DerivedTeamForm).delete()
+        """Save derived team form DataFrame to database.
+
+        Per-gameweek update: deletes existing data for the specific gameweek
+        before inserting new data, preserving historical gameweeks.
+        """
+        with next(get_session()) as session:
+            # Check if data has gameweek column
+            if not df.empty and "gameweek" in df.columns:
+                gameweek = int(df["gameweek"].iloc[0])
+
+                # Delete existing data for this gameweek only
+                deleted_count = (
+                    session.query(models_derived.DerivedTeamForm)
+                    .filter(models_derived.DerivedTeamForm.gameweek == gameweek)
+                    .delete()
+                )
+
+                session.flush()
+
+                if deleted_count > 0:
+                    print(f"  🗑️ Deleted {deleted_count} existing team form for GW{gameweek}")
+
             df_converted = convert_datetime_columns(df, ["last_updated"])
             records = df_converted.to_dict("records")
             session.bulk_insert_mappings(models_derived.DerivedTeamForm, records)
             session.commit()
-        except Exception:
-            session.rollback()
-            raise
-        finally:
-            session.close()
 
     def get_derived_team_form(self) -> pd.DataFrame:
         """Get derived team form as DataFrame."""
@@ -665,19 +691,32 @@ class DatabaseOperations:
             return model_to_dataframe(models_derived.DerivedFixtureDifficulty, query_result)
 
     def save_derived_value_analysis(self, df: pd.DataFrame) -> None:
-        """Save derived value analysis DataFrame to database."""
-        session = self.session_factory()
-        try:
-            session.query(models_derived.DerivedValueAnalysis).delete()
+        """Save derived value analysis DataFrame to database.
+
+        Per-gameweek update: deletes existing data for the specific gameweek
+        before inserting new data, preserving historical gameweeks.
+        """
+        with next(get_session()) as session:
+            # Check if data has gameweek column
+            if not df.empty and "gameweek" in df.columns:
+                gameweek = int(df["gameweek"].iloc[0])
+
+                # Delete existing data for this gameweek only
+                deleted_count = (
+                    session.query(models_derived.DerivedValueAnalysis)
+                    .filter(models_derived.DerivedValueAnalysis.gameweek == gameweek)
+                    .delete()
+                )
+
+                session.flush()
+
+                if deleted_count > 0:
+                    print(f"  🗑️ Deleted {deleted_count} existing value analysis for GW{gameweek}")
+
             df_converted = convert_datetime_columns(df, ["analysis_date"])
             records = df_converted.to_dict("records")
             session.bulk_insert_mappings(models_derived.DerivedValueAnalysis, records)
             session.commit()
-        except Exception:
-            session.rollback()
-            raise
-        finally:
-            session.close()
 
     def get_derived_value_analysis(self) -> pd.DataFrame:
         """Get derived value analysis as DataFrame."""
@@ -686,19 +725,32 @@ class DatabaseOperations:
             return model_to_dataframe(models_derived.DerivedValueAnalysis, query_result)
 
     def save_derived_ownership_trends(self, df: pd.DataFrame) -> None:
-        """Save derived ownership trends DataFrame to database."""
-        session = self.session_factory()
-        try:
-            session.query(models_derived.DerivedOwnershipTrends).delete()
+        """Save derived ownership trends DataFrame to database.
+
+        Per-gameweek update: deletes existing data for the specific gameweek
+        before inserting new data, preserving historical gameweeks.
+        """
+        with next(get_session()) as session:
+            # Check if data has gameweek column
+            if not df.empty and "gameweek" in df.columns:
+                gameweek = int(df["gameweek"].iloc[0])
+
+                # Delete existing data for this gameweek only
+                deleted_count = (
+                    session.query(models_derived.DerivedOwnershipTrends)
+                    .filter(models_derived.DerivedOwnershipTrends.gameweek == gameweek)
+                    .delete()
+                )
+
+                session.flush()
+
+                if deleted_count > 0:
+                    print(f"  🗑️ Deleted {deleted_count} existing ownership trends for GW{gameweek}")
+
             df_converted = convert_datetime_columns(df, ["last_updated"])
             records = df_converted.to_dict("records")
             session.bulk_insert_mappings(models_derived.DerivedOwnershipTrends, records)
             session.commit()
-        except Exception:
-            session.rollback()
-            raise
-        finally:
-            session.close()
 
     def save_all_derived_data(self, derived_dataframes: dict[str, pd.DataFrame]) -> None:
         """Save all derived data DataFrames to database.

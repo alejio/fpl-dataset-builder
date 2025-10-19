@@ -226,16 +226,19 @@ This is a synchronous Python application that captures complete FPL API data and
 ### Output structure:
 Raw+Derived database-only architecture with SQLite database at `data/fpl_data.db`:
 
-- **Raw Data**: Complete FPL API capture (11+ tables with 100% field coverage)
+- **Raw FPL API Data**: Complete FPL API capture (11 tables with 100% field coverage)
   - `raw_players_bootstrap`, `raw_teams_bootstrap`, `raw_events_bootstrap`
   - `raw_game_settings`, `raw_element_stats`, `raw_element_types`
   - `raw_chips`, `raw_phases`, `raw_fixtures`
   - `raw_my_manager`, `raw_my_picks` (historical personal manager data)
+- **Gameweek Historical Data**: Player performance tracking (2 tables)
   - `raw_player_gameweek_performance` (gameweek-by-gameweek player performance)
   - `raw_player_gameweek_snapshot` (APPEND-ONLY player availability snapshots per gameweek)
 - **Derived Analytics**: Advanced metrics and insights (5 tables)
   - `derived_player_metrics`, `derived_team_form`, `derived_fixture_difficulty`
   - `derived_value_analysis`, `derived_ownership_trends`
+
+**Total: 18 database tables** (11 raw + 2 historical + 5 derived)
 
 **Safety features:**
 - Automatic database backups before any modifications

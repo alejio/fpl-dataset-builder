@@ -41,6 +41,22 @@ class DerivedDataProcessor:
         if hasattr(self, "session"):
             self.session.close()
 
+    def _get_current_gameweek(self, raw_data: dict[str, pd.DataFrame]) -> int:
+        """Get current gameweek from events data.
+
+        Args:
+            raw_data: Dictionary containing raw data including events
+
+        Returns:
+            int: Current gameweek number (defaults to 1 if not found)
+        """
+        events = raw_data.get("events", pd.DataFrame())
+        if not events.empty and "is_current" in events.columns:
+            current_events = events[events["is_current"]]
+            if not current_events.empty:
+                return int(current_events["id"].iloc[0])
+        return 1  # Fallback to GW1 if no events data
+
     def process_all_derived_data(self) -> dict[str, pd.DataFrame]:
         """Process all derived data from raw tables.
 
@@ -167,6 +183,7 @@ class DerivedDataProcessor:
         players["rotation_risk"] = self._calculate_rotation_risk(players)
 
         # Meta information
+        players["gameweek"] = self._get_current_gameweek(raw_data)
         players["calculation_date"] = self.calculation_date
         players["calculation_version"] = CALCULATION_VERSION
         players["data_quality_score"] = self._calculate_data_quality(players)
@@ -200,6 +217,7 @@ class DerivedDataProcessor:
                 "freekick_taker",
                 "injury_risk",
                 "rotation_risk",
+                "gameweek",
                 "calculation_date",
                 "calculation_version",
                 "data_quality_score",
@@ -270,6 +288,7 @@ class DerivedDataProcessor:
         teams["defense_confidence"] = 0.75  # Placeholder
 
         # Meta information
+        teams["gameweek"] = self._get_current_gameweek(raw_data)
         teams["games_analyzed"] = 6  # Typical form period
         teams["last_updated"] = self.calculation_date
 
@@ -294,6 +313,7 @@ class DerivedDataProcessor:
                 "momentum",
                 "attack_confidence",
                 "defense_confidence",
+                "gameweek",
                 "games_analyzed",
                 "last_updated",
             ]
@@ -400,6 +420,7 @@ class DerivedDataProcessor:
         players["confidence"] = self._calculate_recommendation_confidence(players)
 
         # Meta information
+        players["gameweek"] = self._get_current_gameweek(raw_data)
         players["analysis_date"] = self.calculation_date
         players["model_version"] = CALCULATION_VERSION
 
@@ -426,6 +447,7 @@ class DerivedDataProcessor:
                 "performance_risk",
                 "recommendation",
                 "confidence",
+                "gameweek",
                 "analysis_date",
                 "model_version",
             ]
@@ -469,8 +491,14 @@ class DerivedDataProcessor:
         players["ownership_risk_level"] = self._categorize_ownership_risk(players)
         players["bandwagon_score"] = self._calculate_bandwagon_score(players)
 
-        # Meta information
-        players["gameweek"] = 1  # Placeholder - would get from events
+        # Meta information - get current gameweek from events
+        events = raw_data.get("events", pd.DataFrame())
+        if not events.empty and "is_current" in events.columns:
+            current_gw = events[events["is_current"]]["id"].iloc[0] if any(events["is_current"]) else 1
+        else:
+            current_gw = 1  # Fallback to GW1 if no events data
+
+        players["gameweek"] = int(current_gw)
         players["last_updated"] = self.calculation_date
 
         # Select columns for schema
