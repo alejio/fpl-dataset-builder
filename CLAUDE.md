@@ -55,30 +55,36 @@ uv run main.py main --help
 
 **Common workflows:**
 ```bash
-# 1. After gameweek finishes (capture new data)
+# 1. After gameweek finishes (capture results)
 uv run main.py main
+# Auto-captures: GW performance + snapshot for NEXT GW
 
 # 2. Before next gameweek starts (refresh everything)
 uv run main.py main --force-refresh-gameweek
+# Auto-captures: Fresh GW data + snapshot for NEXT GW
 
 # 3. Quick price check before deadline
 uv run main.py refresh-bootstrap
+# Auto-captures: Prices/form + snapshot for current/next GW
 ```
 
-### Player snapshot commands
-```bash
-# Capture player availability snapshot for current gameweek
-uv run main.py snapshot
+**✨ NEW: Automatic Snapshot Capture**
+- ✅ **Snapshots are now AUTOMATIC** - No need to run `snapshot` command manually!
+- The `main` and `refresh-bootstrap` commands automatically capture player availability snapshots
+- Snapshots are captured based on gameweek state:
+  - If GW not finished: Captures snapshot for current GW (before deadline)
+  - If GW finished: Captures snapshot for next GW (for upcoming deadline)
 
-# Capture snapshot for specific gameweek
+### Player snapshot commands (Manual - rarely needed)
+```bash
+# The snapshot command is now optional - main/refresh-bootstrap auto-capture!
+# Only use these for manual/historical captures:
+
+# Capture snapshot for specific gameweek (manual)
 uv run main.py snapshot --gameweek 8
 
 # Force overwrite existing snapshot
 uv run main.py snapshot --gameweek 8 --force
-
-# Example: Capture snapshots before each gameweek deadline
-# (run this before GW deadline to preserve historical availability state)
-uv run main.py snapshot
 ```
 
 

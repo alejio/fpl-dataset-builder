@@ -52,7 +52,8 @@ class DerivedDataProcessor:
         """
         events = raw_data.get("events", pd.DataFrame())
         if not events.empty and "is_current" in events.columns:
-            current_events = events[events["is_current"]]
+            # is_current is stored as int (0/1), not bool, so use explicit comparison
+            current_events = events[events["is_current"] == 1]
             if not current_events.empty:
                 return int(current_events["id"].iloc[0])
         return 1  # Fallback to GW1 if no events data
@@ -87,7 +88,10 @@ class DerivedDataProcessor:
             return derived_data
 
         except Exception as e:
+            import traceback
+
             logger.error(f"Error processing derived data: {e}")
+            logger.error(f"Full traceback:\n{traceback.format_exc()}")
             # Return empty datasets with correct schemas on failure
             return self._create_empty_derived_datasets()
 
@@ -494,7 +498,8 @@ class DerivedDataProcessor:
         # Meta information - get current gameweek from events
         events = raw_data.get("events", pd.DataFrame())
         if not events.empty and "is_current" in events.columns:
-            current_gw = events[events["is_current"]]["id"].iloc[0] if any(events["is_current"]) else 1
+            # is_current is stored as int (0/1), not bool, so use explicit comparison
+            current_gw = events[events["is_current"] == 1]["id"].iloc[0] if any(events["is_current"] == 1) else 1
         else:
             current_gw = 1  # Fallback to GW1 if no events data
 

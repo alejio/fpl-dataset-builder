@@ -32,8 +32,6 @@ def validate_data_integrity(data_dir: str = "data") -> dict[str, bool]:
                 "raw_teams_bootstrap": "Raw teams data from FPL API",
                 "raw_events_bootstrap": "Raw events/gameweeks data from FPL API",
                 "raw_fixtures": "Raw fixtures data from FPL API",
-                "players_current": "Legacy players table",
-                "teams_current": "Legacy teams table",
             }
 
             for table_name, _description in critical_tables.items():
@@ -52,23 +50,20 @@ def validate_data_integrity(data_dir: str = "data") -> dict[str, bool]:
                     logger.error(f"Error checking table {table_name}: {e}")
                     results[f"{table_name}_exists_with_data"] = False
 
-            # Validate data consistency between raw and legacy tables
+            # Validate data consistency across raw tables
             try:
-                # Check if raw players data exists
+                # Check if raw data tables are consistent
                 raw_players_count = session.execute(text("SELECT COUNT(*) FROM raw_players_bootstrap")).scalar()
-                legacy_players_count = session.execute(text("SELECT COUNT(*) FROM players_current")).scalar()
-
-                results["raw_vs_legacy_players_consistency"] = raw_players_count > 0 and legacy_players_count > 0
-
-                # Check team consistency
                 raw_teams_count = session.execute(text("SELECT COUNT(*) FROM raw_teams_bootstrap")).scalar()
-                legacy_teams_count = session.execute(text("SELECT COUNT(*) FROM teams_current")).scalar()
 
-                results["raw_vs_legacy_teams_consistency"] = raw_teams_count > 0 and legacy_teams_count > 0
+                # Basic sanity checks
+                results["table_consistency_check"] = (
+                    raw_players_count > 0 and raw_teams_count == 20  # FPL always has 20 teams
+                )
 
             except Exception as e:
                 logger.error(f"Error validating table consistency: {e}")
-                results["table_consistency_error"] = str(e)
+                results["table_consistency_error"] = True
 
             # Validate database schema integrity
             try:

@@ -176,6 +176,63 @@ def process_and_save_derived_data() -> None:
     typer.echo()
 
 
+def auto_capture_snapshot_if_needed(current_gameweek: int, is_finished: bool, bootstrap: dict) -> bool:
+    """Automatically capture availability snapshot based on gameweek state.
+
+    Logic:
+    - If current GW not finished: Capture snapshot for current GW (before deadline)
+    - If current GW finished: Capture snapshot for next GW (for next deadline)
+
+    Args:
+        current_gameweek: Current gameweek number
+        is_finished: Whether current gameweek has finished
+        bootstrap: Bootstrap data dictionary
+
+    Returns:
+        True if snapshot was captured, False if skipped
+    """
+    from db.operations import DatabaseOperations
+    from fetchers.raw_processor import process_player_gameweek_snapshot
+
+    # Determine which GW to snapshot
+    snapshot_gw = current_gameweek if not is_finished else current_gameweek + 1
+
+    # Check if snapshot already exists
+    client = FPLDataClient()
+    try:
+        existing = client.get_player_availability_snapshot(snapshot_gw)
+        if not existing.empty:
+            typer.echo(f"ℹ️  Snapshot for GW{snapshot_gw} already exists - skipping auto-capture")
+            return False
+    except Exception:
+        pass
+
+    # Capture snapshot
+    if is_finished:
+        typer.echo(f"📸 Auto-capturing availability snapshot for next gameweek (GW{snapshot_gw})...")
+    else:
+        typer.echo(f"📸 Auto-capturing availability snapshot for current gameweek (GW{snapshot_gw})...")
+
+    snapshot_df = process_player_gameweek_snapshot(bootstrap, gameweek=snapshot_gw, is_backfilled=False)
+
+    if snapshot_df.empty:
+        typer.echo("⚠️  Could not process snapshot data")
+        return False
+
+    # Save snapshot
+    db_ops = DatabaseOperations()
+    try:
+        db_ops.save_raw_player_gameweek_snapshot(snapshot_df, force=False)
+        typer.echo(f"✅ Snapshot saved for GW{snapshot_gw} ({len(snapshot_df)} players)")
+        return True
+    except Exception as e:
+        if "UNIQUE constraint failed" in str(e) or "already exists" in str(e):
+            typer.echo(f"ℹ️  Snapshot for GW{snapshot_gw} already exists")
+        else:
+            typer.echo(f"⚠️  Could not save snapshot: {str(e)[:100]}")
+        return False
+
+
 def print_completion_summary(operations: dict) -> None:
     """Print a friendly summary of what was updated.
 
@@ -185,6 +242,7 @@ def print_completion_summary(operations: dict) -> None:
             - gameweek_updated: bool or None
             - gameweek_skipped: bool
             - derived_updated: bool
+            - snapshot_captured: bool
             - current_gameweek: int
             - is_finished: bool
     """
@@ -194,6 +252,10 @@ def print_completion_summary(operations: dict) -> None:
 
     if operations.get("bootstrap_updated"):
         typer.echo("  ✅ Bootstrap data refreshed (players, teams, prices, form)")
+
+    if operations.get("snapshot_captured"):
+        gw = operations.get("snapshot_gameweek")
+        typer.echo(f"  ✅ Availability snapshot captured for GW{gw}")
 
     if operations.get("gameweek_updated"):
         gw = operations.get("current_gameweek")

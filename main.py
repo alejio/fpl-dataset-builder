@@ -7,6 +7,7 @@ A minimal, synchronous script to download and normalize FPL data.
 import typer
 
 from cli.helpers import (
+    auto_capture_snapshot_if_needed,
     fetch_and_save_bootstrap_data,
     fetch_and_save_gameweek_data,
     initialize_data_environment,
@@ -39,18 +40,23 @@ def main(
 
     This command fetches the latest FPL data and updates the database:
     - Bootstrap data (players, teams, prices, form) - ALWAYS refreshed
+    - Availability snapshot - AUTOMATICALLY captured for current/next GW
     - Current gameweek data - Only if missing (use --force-refresh-gameweek to update)
     - Derived analytics - ALWAYS reprocessed from fresh raw data
 
+    The snapshot is automatically captured based on gameweek state:
+    - If GW not finished: Captures snapshot for current GW (before deadline)
+    - If GW finished: Captures snapshot for next GW (for upcoming deadline)
+
     Common workflows:
 
-    1. After gameweek finishes (capture new data):
+    1. After gameweek finishes (capture results):
        uv run main.py main
 
     2. Before next gameweek starts (refresh everything):
        uv run main.py main --force-refresh-gameweek
 
-    3. Quick price/form update only:
+    3. Quick price/form update (fastest):
        uv run main.py main --skip-gameweek --skip-derived
     """
     typer.echo("🏈 FPL Dataset Builder V0.1 - Smart Refresh")
@@ -70,7 +76,12 @@ def main(
     typer.echo(f"📅 Current gameweek: GW{current_gameweek} ({'Finished' if is_finished else 'In Progress'})")
     typer.echo()
 
-    # 4. Fetch and save gameweek data (with smart refresh logic)
+    # 4. Auto-capture availability snapshot (smart logic based on GW state)
+    snapshot_captured = auto_capture_snapshot_if_needed(current_gameweek, is_finished, bootstrap)
+    snapshot_gameweek = current_gameweek if not is_finished else current_gameweek + 1
+    typer.echo()
+
+    # 5. Fetch and save gameweek data (with smart refresh logic)
     gameweek_updated = False
     gameweek_skipped = False
 
@@ -85,16 +96,18 @@ def main(
             gameweek_skipped = True
     typer.echo()
 
-    # 5. Process derived analytics (ALWAYS reprocessed from fresh raw data)
+    # 6. Process derived analytics (ALWAYS reprocessed from fresh raw data)
     if skip_derived:
         typer.echo("⏭️  Skipping derived analytics processing (--skip-derived enabled)")
     else:
         process_and_save_derived_data()
 
-    # 6. Print completion summary
+    # 7. Print completion summary
     print_completion_summary(
         {
             "bootstrap_updated": True,
+            "snapshot_captured": snapshot_captured,
+            "snapshot_gameweek": snapshot_gameweek,
             "gameweek_updated": gameweek_updated,
             "gameweek_skipped": gameweek_skipped,
             "derived_updated": not skip_derived,
@@ -189,6 +202,8 @@ def refresh_bootstrap(
     Use this to get latest prices and form before deadline without refetching
     gameweek data. This is much faster than a full refresh.
 
+    Also automatically captures availability snapshot for current/next gameweek.
+
     Example usage:
         uv run main.py refresh-bootstrap              # Quick price/form update
         uv run main.py refresh-bootstrap --manager-id 12345
@@ -205,10 +220,16 @@ def refresh_bootstrap(
     # Get current gameweek info
     current_gameweek, is_finished = get_current_gameweek(bootstrap)
 
+    # Auto-capture availability snapshot
+    snapshot_captured = auto_capture_snapshot_if_needed(current_gameweek, is_finished, bootstrap)
+    snapshot_gameweek = current_gameweek if not is_finished else current_gameweek + 1
+
     typer.echo()
     typer.echo("🎉 Bootstrap refresh completed!")
     typer.echo(f"📅 Current gameweek: GW{current_gameweek} ({'Finished' if is_finished else 'In Progress'})")
     typer.echo("✅ Latest player prices, form, and availability updated")
+    if snapshot_captured:
+        typer.echo(f"✅ Availability snapshot captured for GW{snapshot_gameweek}")
     typer.echo()
     typer.echo("💡 Tip: Use 'uv run main.py main' for a full refresh including gameweek data")
 
