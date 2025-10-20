@@ -290,5 +290,156 @@ def refresh_gameweek(
         typer.echo("   Use --force to refresh anyway")
 
 
+# Create backfill subcommand group
+backfill_app = typer.Typer(help="Backfill historical data for gameweeks and snapshots")
+app.add_typer(backfill_app, name="backfill")
+
+
+@backfill_app.command(name="gameweeks")
+def backfill_gameweeks_cmd(
+    gameweek: int = typer.Option(None, "--gameweek", "-g", help="Specific gameweek to backfill"),
+    start_gw: int = typer.Option(None, "--start-gw", help="Starting gameweek for range backfill"),
+    end_gw: int = typer.Option(None, "--end-gw", help="Ending gameweek for range backfill"),
+    manager_id: int = typer.Option(4233026, "--manager-id", help="FPL manager ID for personal data tracking"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be backfilled without saving"),
+    force: bool = typer.Option(False, "--force", help="Overwrite existing gameweek data"),
+):
+    """Backfill missing gameweek performance data.
+
+    Examples:
+        uv run main.py backfill gameweeks                    # Auto-detect missing gameweeks
+        uv run main.py backfill gameweeks --gameweek 1       # Backfill specific gameweek
+        uv run main.py backfill gameweeks --start-gw 1 --end-gw 5  # Backfill range
+        uv run main.py backfill gameweeks --dry-run          # Preview what would be backfilled
+    """
+    from scripts.backfill.gameweeks import main as gameweeks_main
+
+    gameweeks_main(gameweek, start_gw, end_gw, manager_id, dry_run, force)
+
+
+@backfill_app.command(name="snapshots")
+def backfill_snapshots_cmd(
+    gameweek: int = typer.Option(None, "--gameweek", "-g", help="Specific gameweek to backfill (1-6)"),
+    start_gw: int = typer.Option(None, "--start-gw", help="Starting gameweek (1-6)"),
+    end_gw: int = typer.Option(None, "--end-gw", help="Ending gameweek (1-6)"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be backfilled without saving"),
+    force: bool = typer.Option(False, "--force", help="Overwrite existing snapshot data"),
+    season: str = typer.Option("2025-26", "--season", help="Season to fetch data from"),
+):
+    """Backfill player availability snapshots for GW1-6 using vaastav's historical data.
+
+    Examples:
+        uv run main.py backfill snapshots                    # Backfill all GW1-6
+        uv run main.py backfill snapshots --gameweek 3       # Backfill specific gameweek
+        uv run main.py backfill snapshots --start-gw 1 --end-gw 4  # Backfill range
+    """
+    from scripts.backfill.snapshots import main as snapshots_main
+
+    snapshots_main(gameweek, start_gw, end_gw, dry_run, force, season)
+
+
+@backfill_app.command(name="derived")
+def backfill_derived_cmd(
+    gameweek: int = typer.Option(None, "--gameweek", "-g", help="Specific gameweek to backfill"),
+    start_gw: int = typer.Option(None, "--start-gw", help="Starting gameweek for range backfill"),
+    end_gw: int = typer.Option(None, "--end-gw", help="Ending gameweek for range backfill"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be backfilled without saving"),
+    force: bool = typer.Option(False, "--force", help="Overwrite existing derived data"),
+):
+    """Backfill all derived analytics tables for historical gameweeks.
+
+    Examples:
+        uv run main.py backfill derived                      # Backfill all missing gameweeks
+        uv run main.py backfill derived --gameweek 5         # Backfill specific gameweek
+        uv run main.py backfill derived --start-gw 1 --end-gw 5  # Backfill range
+    """
+    # Import at runtime to avoid circular dependencies
+    import sys
+
+    # Convert None to None for compatibility with argparse-based script
+    sys.argv = ["backfill_derived"]
+    if gameweek:
+        sys.argv.extend(["--gameweek", str(gameweek)])
+    if start_gw:
+        sys.argv.extend(["--start-gw", str(start_gw)])
+    if end_gw:
+        sys.argv.extend(["--end-gw", str(end_gw)])
+    if dry_run:
+        sys.argv.append("--dry-run")
+    if force:
+        sys.argv.append("--force")
+
+    from scripts.backfill.derived import main as derived_main
+
+    derived_main()
+
+
+@backfill_app.command(name="ownership")
+def backfill_ownership_cmd(
+    gameweek: int = typer.Option(None, "--gameweek", "-g", help="Specific gameweek to backfill"),
+    start_gw: int = typer.Option(None, "--start-gw", help="Starting gameweek for range backfill"),
+    end_gw: int = typer.Option(None, "--end-gw", help="Ending gameweek for range backfill"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be backfilled without saving"),
+    force: bool = typer.Option(False, "--force", help="Overwrite existing ownership data"),
+):
+    """Backfill derived ownership trends for historical gameweeks.
+
+    Examples:
+        uv run main.py backfill ownership                    # Backfill all missing gameweeks
+        uv run main.py backfill ownership --gameweek 5       # Backfill specific gameweek
+    """
+    import sys
+
+    sys.argv = ["backfill_ownership"]
+    if gameweek:
+        sys.argv.extend(["--gameweek", str(gameweek)])
+    if start_gw:
+        sys.argv.extend(["--start-gw", str(start_gw)])
+    if end_gw:
+        sys.argv.extend(["--end-gw", str(end_gw)])
+    if dry_run:
+        sys.argv.append("--dry-run")
+    if force:
+        sys.argv.append("--force")
+
+    from scripts.backfill.ownership import main as ownership_main
+
+    ownership_main()
+
+
+# Create migrate subcommand group
+migrate_app = typer.Typer(help="Database migration utilities")
+app.add_typer(migrate_app, name="migrate")
+
+
+@migrate_app.command(name="derived-tables")
+def migrate_derived_tables_cmd():
+    """Migrate all derived tables to support historical gameweek data.
+
+    ⚠️  WARNING: This will DROP and recreate tables, losing existing data.
+    Run backfill after migration to repopulate historical data.
+
+    Example:
+        uv run main.py migrate derived-tables
+    """
+    from scripts.migrations.derived_tables import migrate_derived_tables
+
+    migrate_derived_tables()
+
+
+@migrate_app.command(name="ownership-trends")
+def migrate_ownership_trends_cmd():
+    """Migrate ownership trends table to support historical gameweek data.
+
+    ⚠️  WARNING: This will DROP and recreate the table, losing existing data.
+
+    Example:
+        uv run main.py migrate ownership-trends
+    """
+    from scripts.migrations.ownership_trends import migrate_ownership_trends
+
+    migrate_ownership_trends()
+
+
 if __name__ == "__main__":
     app()

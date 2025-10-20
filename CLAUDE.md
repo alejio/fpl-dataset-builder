@@ -112,49 +112,47 @@ uv run main.py safety restore filename.csv
 uv run main.py safety cleanup --days 7
 ```
 
-### Gameweek backfill commands
+### Backfill commands (historical data recovery)
 ```bash
-# Backfill all missing gameweeks up to current
-uv run python backfill_gameweeks.py
+# Backfill gameweek performance data
+uv run main.py backfill gameweeks                    # Auto-detect missing gameweeks
+uv run main.py backfill gameweeks --gameweek 1       # Backfill specific gameweek
+uv run main.py backfill gameweeks --start-gw 1 --end-gw 5  # Backfill range
+uv run main.py backfill gameweeks --manager-id 12345 # Use different manager ID
+uv run main.py backfill gameweeks --dry-run          # Preview what would be backfilled
+uv run main.py backfill gameweeks --force            # Overwrite existing data
 
-# Backfill specific gameweek
-uv run python backfill_gameweeks.py --gameweek 1
+# Backfill player availability snapshots (GW1-6 only, uses vaastav historical data)
+uv run main.py backfill snapshots                    # Backfill all GW1-6
+uv run main.py backfill snapshots --gameweek 3       # Backfill specific gameweek (1-6)
+uv run main.py backfill snapshots --start-gw 1 --end-gw 4  # Backfill range
+uv run main.py backfill snapshots --dry-run          # Preview what would be backfilled
+uv run main.py backfill snapshots --force            # Overwrite existing snapshots
+uv run main.py backfill snapshots --season 2024-25   # Use different season data
 
-# Backfill range of gameweeks
-uv run python backfill_gameweeks.py --start-gw 1 --end-gw 5
+# Backfill derived analytics
+uv run main.py backfill derived                      # Backfill all missing gameweeks
+uv run main.py backfill derived --gameweek 5         # Backfill specific gameweek
+uv run main.py backfill derived --start-gw 1 --end-gw 5  # Backfill range
+uv run main.py backfill derived --dry-run            # Preview what would be backfilled
 
-# Backfill with different manager ID
-uv run python backfill_gameweeks.py --manager-id 12345
-
-# Dry run to see what would be backfilled
-uv run python backfill_gameweeks.py --dry-run
-
-# Force overwrite existing gameweek data
-uv run python backfill_gameweeks.py --gameweek 2 --force
-```
-
-### Player snapshot backfill (vaastav historical data - GW1-6 only)
-```bash
-# Backfill all GW1-6 snapshots using real historical data
-uv run python backfill_snapshots_vaastav.py
-
-# Backfill specific gameweek (1-6 only)
-uv run python backfill_snapshots_vaastav.py --gameweek 3
-
-# Backfill range (within 1-6)
-uv run python backfill_snapshots_vaastav.py --start-gw 1 --end-gw 4
-
-# Dry run to preview what would be backfilled
-uv run python backfill_snapshots_vaastav.py --dry-run
-
-# Force overwrite existing snapshots
-uv run python backfill_snapshots_vaastav.py --force
-
-# Use different season data
-uv run python backfill_snapshots_vaastav.py --season 2024-25
+# Backfill ownership trends
+uv run main.py backfill ownership                    # Backfill all missing gameweeks
+uv run main.py backfill ownership --gameweek 5       # Backfill specific gameweek
 
 # Test backfilled data
 uv run python -c "from client.fpl_data_client import FPLDataClient; client=FPLDataClient(); snapshot=client.get_player_availability_snapshot(1); print(f'GW1: {len(snapshot)} snapshots, Backfilled: {snapshot[\"is_backfilled\"].sum()}')"
+```
+
+### Migration commands (schema changes)
+```bash
+# Migrate derived tables to support historical gameweek data
+# ⚠️  WARNING: Drops and recreates tables, losing existing data
+uv run main.py migrate derived-tables
+
+# Migrate ownership trends table
+# ⚠️  WARNING: Drops and recreates table, losing existing data
+uv run main.py migrate ownership-trends
 ```
 
 ### Database commands
@@ -197,15 +195,29 @@ This is a synchronous Python application that captures complete FPL API data and
 
 ### Package structure:
 ```
-├── main.py              # Unified CLI entry point with safety integration
+├── main.py              # Unified CLI entry point with all subcommands
 ├── utils.py             # HTTP utilities, datetime helpers, file system functions
-├── migrations/          # Database migration utilities
+├── cli/                 # CLI helper functions
+│   └── helpers.py       # Shared CLI workflow logic
+├── scripts/             # Organized scripts for maintenance and backfill
+│   ├── backfill/        # Historical data recovery scripts
+│   │   ├── gameweeks.py    # Backfill gameweek performance data
+│   │   ├── snapshots.py    # Backfill player availability snapshots (GW1-6)
+│   │   ├── derived.py      # Backfill derived analytics
+│   │   └── ownership.py    # Backfill ownership trends
+│   ├── migrations/      # Database schema migration scripts
+│   │   ├── derived_tables.py    # Migrate derived tables
+│   │   └── ownership_trends.py  # Migrate ownership trends
+│   └── maintenance/     # One-time fixes and updates
+│       └── fix_value_column.py  # Example maintenance script
+├── migrations/          # Alembic database migration utilities
 │   └── manager.py       # Migration management
 ├── client/              # Database client library for external projects
 │   └── fpl_data_client.py # Clean API for accessing database data
 ├── db/                  # Database layer with SQLAlchemy 2.0
 │   ├── database.py      # Database configuration and session management
-│   ├── models.py        # SQLAlchemy models mirroring Pydantic models
+│   ├── models_raw.py    # SQLAlchemy models for raw data tables
+│   ├── models_derived.py # SQLAlchemy models for derived analytics
 │   └── operations.py    # CRUD operations with DataFrame integration
 ├── fetchers/            # Modular data fetching and processing
 │   ├── fpl_api.py       # FPL API endpoints (bootstrap, fixtures)
@@ -221,7 +233,7 @@ This is a synchronous Python application that captures complete FPL API data and
 └── safety/              # Data protection and backup systems
     ├── backup.py        # Safe file operations, backup management
     ├── integrity.py     # Data consistency validation
-    └── cli.py          # Safety CLI subcommands
+    └── cli.py           # Safety CLI subcommands
 ```
 
 ### Core features:
@@ -229,14 +241,15 @@ This is a synchronous Python application that captures complete FPL API data and
 - **Gameweek Historical Data**: Stores player performance for every gameweek for historical analysis
 - **Player Availability Snapshots**: APPEND-ONLY snapshots of player state (injuries, news) per gameweek for accurate historical analysis
 - **Duplicate Prevention**: Database unique constraints prevent duplicate gameweek records
-- **Backfill Capability**: Dedicated script to capture missing historical gameweek data
+- **Backfill Capability**: CLI subcommands for recovering historical gameweek data, snapshots, and derived analytics
 - **Derived Analytics**: Advanced metrics and insights processed from raw data
 - **Database-Only Storage**: SQLite database with automatic table creation and migrations
 - **Client Library**: Clean Python API for external projects to access database data
 - **Manager Data**: Personal FPL manager tracking (picks, history, performance)
 - **Live Data Processing**: Captures in-progress gameweek data for real-time analysis
 - **Data Safety**: Automatic backups, integrity validation, safe database operations
-- **Modular Design**: Focused packages with clear responsibilities
+- **Unified CLI**: All operations accessible via `main.py` with organized subcommands
+- **Modular Design**: Focused packages with clear responsibilities (scripts/, db/, fetchers/, etc.)
 - **Error Handling**: Graceful failure with empty schema-compliant datasets
 - **Validation**: Comprehensive Pandera schemas for raw and derived data
 
