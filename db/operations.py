@@ -525,43 +525,99 @@ class DatabaseOperations:
         return legacy_fixtures
 
     def get_gameweek_live_data(self, gameweek: int | None = None) -> pd.DataFrame:
-        """Get gameweek live data in legacy format.
+        """Get gameweek performance data from raw_player_gameweek_performance.
 
-        Note: This would need actual live data from FPL API.
-        For now returns empty DataFrame as this data isn't captured in raw tables.
+        Args:
+            gameweek: Specific gameweek number, or None for all gameweeks
+
+        Returns:
+            DataFrame with player performance data for the specified gameweek(s)
         """
-        # This would require implementing live data capture from FPL API
-        # For now, return empty DataFrame with expected structure
-        columns = [
-            "id",
-            "player_id",
-            "event",
-            "minutes",
-            "goals_scored",
-            "assists",
-            "clean_sheets",
-            "goals_conceded",
-            "own_goals",
-            "penalties_saved",
-            "penalties_missed",
-            "yellow_cards",
-            "red_cards",
-            "saves",
-            "bonus",
-            "bps",
-        ]
-        return pd.DataFrame(columns=columns)
+        with next(get_session()) as session:
+            query = session.query(models_raw.RawPlayerGameweekPerformance)
+
+            if gameweek is not None:
+                query = query.filter(models_raw.RawPlayerGameweekPerformance.gameweek == gameweek)
+
+            query_result = query.all()
+
+            if not query_result:
+                # Return empty DataFrame with expected structure
+                columns = [
+                    "id",
+                    "player_id",
+                    "event",
+                    "minutes",
+                    "goals_scored",
+                    "assists",
+                    "clean_sheets",
+                    "goals_conceded",
+                    "own_goals",
+                    "penalties_saved",
+                    "penalties_missed",
+                    "yellow_cards",
+                    "red_cards",
+                    "saves",
+                    "bonus",
+                    "bps",
+                ]
+                return pd.DataFrame(columns=columns)
+
+            # Convert to DataFrame
+            df = model_to_dataframe(models_raw.RawPlayerGameweekPerformance, query_result)
+
+            # Rename gameweek to event for legacy compatibility
+            if "gameweek" in df.columns:
+                df = df.rename(columns={"gameweek": "event"})
+
+            # Ensure player_id exists (use id if not)
+            if "player_id" not in df.columns and "id" in df.columns:
+                df["player_id"] = df["id"]
+
+            return df
 
     def get_player_xg_xa_rates(self) -> pd.DataFrame:
-        """Get player xG/xA rates in legacy format.
+        """Get player xG/xA rates per 90 minutes from FPL API data.
 
-        Note: This would need external data source or calculation from raw data.
-        For now returns empty DataFrame as this data isn't in raw tables.
+        Calculates xG90 and xA90 from cumulative expected_goals/expected_assists
+        and minutes played in raw_players_bootstrap.
+
+        Returns:
+            DataFrame with columns: id, player, team, team_id, season, xG90, xA90, as_of_utc, mapped_player_id
         """
-        # This would require external data source or calculation from historical data
-        # For now, return empty DataFrame with expected structure
-        columns = ["id", "player", "team", "team_id", "season", "xG90", "xA90", "as_of_utc", "mapped_player_id"]
-        return pd.DataFrame(columns=columns)
+        with next(get_session()) as session:
+            query_result = (
+                session.query(models_raw.RawPlayerBootstrap).filter(models_raw.RawPlayerBootstrap.minutes > 0).all()
+            )
+
+            if not query_result:
+                # Return empty DataFrame with expected structure if no data
+                columns = ["id", "player", "team", "team_id", "season", "xG90", "xA90", "as_of_utc", "mapped_player_id"]
+                return pd.DataFrame(columns=columns)
+
+            # Convert to DataFrame and calculate per-90 rates
+            df = model_to_dataframe(models_raw.RawPlayerBootstrap, query_result)
+
+            # Calculate xG90 and xA90 from cumulative values
+            df["xG90"] = (df["expected_goals"].astype(float) * 90.0 / df["minutes"]).fillna(0.0)
+            df["xA90"] = (df["expected_assists"].astype(float) * 90.0 / df["minutes"]).fillna(0.0)
+
+            # Return in expected legacy format
+            result_df = pd.DataFrame(
+                {
+                    "id": df["player_id"],
+                    "player": df["web_name"],
+                    "team": "",  # Team name not easily available without join
+                    "team_id": df["team_id"],
+                    "season": "2024-25",
+                    "xG90": df["xG90"],
+                    "xA90": df["xA90"],
+                    "as_of_utc": df["as_of_utc"],
+                    "mapped_player_id": df["player_id"],  # Use player_id as mapped_player_id
+                }
+            )
+
+            return result_df
 
     def save_all_raw_data(self, raw_dataframes: dict[str, pd.DataFrame]) -> None:
         """Save all raw data DataFrames to database.
