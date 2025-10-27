@@ -55,6 +55,7 @@ class DerivedDataProcessor:
             # is_current is stored as int (0/1), not bool, so use explicit comparison
             current_events = events[events["is_current"] == 1]
             if not current_events.empty:
+                # Column is normalized to 'id' in _load_raw_data()
                 return int(current_events["id"].iloc[0])
         return 1  # Fallback to GW1 if no events data
 
@@ -104,16 +105,31 @@ class DerivedDataProcessor:
         # Load raw players data
         players_query = text("SELECT * FROM raw_players_bootstrap")
         raw_data["players"] = pd.read_sql(players_query, self.session.bind)
+        # Rename columns for backwards compatibility with processing code
+        if "player_id" in raw_data["players"].columns:
+            raw_data["players"] = raw_data["players"].rename(
+                columns={
+                    "player_id": "id",
+                    "position_id": "element_type",  # Rename position_id to element_type
+                    "team_id": "team",  # Rename team_id to team
+                }
+            )
         logger.info(f"Loaded {len(raw_data['players'])} players")
 
         # Load raw teams data
         teams_query = text("SELECT * FROM raw_teams_bootstrap")
         raw_data["teams"] = pd.read_sql(teams_query, self.session.bind)
+        # Rename team_id to id for backwards compatibility
+        if "team_id" in raw_data["teams"].columns:
+            raw_data["teams"] = raw_data["teams"].rename(columns={"team_id": "id"})
         logger.info(f"Loaded {len(raw_data['teams'])} teams")
 
         # Load raw events data
         events_query = text("SELECT * FROM raw_events_bootstrap")
         raw_data["events"] = pd.read_sql(events_query, self.session.bind)
+        # Rename event_id to id for backwards compatibility
+        if "event_id" in raw_data["events"].columns:
+            raw_data["events"] = raw_data["events"].rename(columns={"event_id": "id"})
         logger.info(f"Loaded {len(raw_data['events'])} events")
 
         # Load raw fixtures data
@@ -387,36 +403,51 @@ class DerivedDataProcessor:
             logger.warning("No raw players data available for value analysis")
             return self._create_empty_value_analysis()
 
+        # Get current gameweek
+        current_gw = self._get_current_gameweek(raw_data)
+
+        # Identify new players (no historical gameweek performance data)
+        new_players = self._identify_new_players(players, current_gw)
+
         players["current_price"] = players["now_cost"] / 10.0
 
         # Handle negative total points for schema compliance
         players["total_points"] = np.maximum(players["total_points"], 0)
 
-        # Value metrics - handle negative total points
+        # Value metrics - new players get neutral 0.5 points_per_pound
         players["points_per_pound"] = np.where(
-            players["current_price"] > 0,
-            np.maximum(players["total_points"], 0)
-            / players["current_price"],  # Use max(0, total_points) to avoid negative values
-            0.0,
+            players["id"].isin(new_players),
+            0.5,  # Neutral value for new players
+            np.where(
+                players["current_price"] > 0,
+                np.maximum(players["total_points"], 0) / players["current_price"],
+                0.0,
+            ),
         )
 
-        players["expected_points_per_pound"] = self._calculate_expected_value(players)
-        players["value_vs_position"] = self._calculate_position_percentile(players, "points_per_pound")
-        players["value_vs_price_tier"] = self._calculate_price_tier_percentile(players)
+        players["expected_points_per_pound"] = self._calculate_expected_value(players, new_players)
+        players["value_vs_position"] = self._calculate_position_percentile(players, "points_per_pound", new_players)
+        players["value_vs_price_tier"] = self._calculate_price_tier_percentile(players, new_players)
 
-        # Price predictions
-        players["predicted_price_change_1gw"] = self._predict_price_change(players, 1)
-        players["predicted_price_change_5gw"] = self._predict_price_change(players, 5)
-        players["price_volatility"] = self._calculate_price_volatility(players)
+        # Price predictions - new players get 0 predicted change
+        players["predicted_price_change_1gw"] = np.where(
+            players["id"].isin(new_players), 0.0, self._predict_price_change(players, 1)
+        )
+        players["predicted_price_change_5gw"] = np.where(
+            players["id"].isin(new_players), 0.0, self._predict_price_change(players, 5)
+        )
+        players["price_volatility"] = np.where(
+            players["id"].isin(new_players), 0.0, self._calculate_price_volatility(players)
+        )
 
         # Recommendations
         players["buy_rating"] = self._calculate_buy_rating(players)
         players["sell_rating"] = self._calculate_sell_rating(players)
         players["hold_rating"] = self._calculate_hold_rating(players)
 
-        # Risk factors
+        # Risk factors - new players get 0 price risk
         players["ownership_risk"] = self._calculate_ownership_risk(players)
-        players["price_risk"] = self._calculate_price_drop_risk(players)
+        players["price_risk"] = np.where(players["id"].isin(new_players), 0.0, self._calculate_price_drop_risk(players))
         players["performance_risk"] = self._calculate_performance_risk(players)
 
         # Overall recommendation
@@ -424,7 +455,7 @@ class DerivedDataProcessor:
         players["confidence"] = self._calculate_recommendation_confidence(players)
 
         # Meta information
-        players["gameweek"] = self._get_current_gameweek(raw_data)
+        players["gameweek"] = current_gw
         players["analysis_date"] = self.calculation_date
         players["model_version"] = CALCULATION_VERSION
 
@@ -459,7 +490,9 @@ class DerivedDataProcessor:
 
         try:
             validated_df = DerivedValueAnalysisSchema.validate(derived_value)
-            logger.info(f"Processed {len(validated_df)} value analysis records successfully")
+            logger.info(
+                f"Processed {len(validated_df)} value analysis records successfully ({len(new_players)} new players initialized)"
+            )
             return validated_df
         except Exception as e:
             logger.error(f"Value analysis schema validation failed: {e}")
@@ -475,34 +508,44 @@ class DerivedDataProcessor:
             logger.warning("No raw players data available for ownership trends")
             return self._create_empty_ownership_trends()
 
+        # Get current gameweek
+        current_gw = self._get_current_gameweek(raw_data)
+
+        # Identify new players (no historical gameweek performance data)
+        new_players = self._identify_new_players(players, current_gw)
+
         # Transfer metrics
         players["transfers_in_gw"] = players.get("transfers_in_event", 0).fillna(0).astype(int)
         players["transfers_out_gw"] = players.get("transfers_out_event", 0).fillna(0).astype(int)
         players["net_transfers_gw"] = players["transfers_in_gw"] - players["transfers_out_gw"]
 
         # Rolling averages (placeholder - would need historical data)
-        players["avg_transfers_in_5gw"] = players["transfers_in_gw"] * 0.8  # Simplified
-        players["avg_transfers_out_5gw"] = players["transfers_out_gw"] * 0.8
-        players["avg_net_transfers_5gw"] = players["net_transfers_gw"] * 0.8
+        # For new players, use 0 instead of scaled current values
+        players["avg_transfers_in_5gw"] = np.where(
+            players["id"].isin(new_players), 0, players["transfers_in_gw"] * 0.8
+        ).astype(float)
+        players["avg_transfers_out_5gw"] = np.where(
+            players["id"].isin(new_players), 0, players["transfers_out_gw"] * 0.8
+        ).astype(float)
+        players["avg_net_transfers_5gw"] = np.where(
+            players["id"].isin(new_players), 0, players["net_transfers_gw"] * 0.8
+        ).astype(float)
 
-        # Momentum analysis
-        players["transfer_momentum"] = self._analyze_transfer_momentum(players)
+        # Momentum analysis - new players get "neutral" momentum
+        players["transfer_momentum"] = self._analyze_transfer_momentum(players, new_players)
         players["momentum_strength"] = self._calculate_momentum_strength(players)
-        players["ownership_velocity"] = players["net_transfers_gw"] / 1000.0  # Normalize
+        players["ownership_velocity"] = np.where(
+            players["id"].isin(new_players), 0.0, players["net_transfers_gw"] / 1000.0
+        )
 
-        # Ownership categorization
-        players["ownership_tier"] = self._categorize_ownership(players)
+        # Ownership categorization - new players default to "punt" tier
+        players["ownership_tier"] = self._categorize_ownership(players, new_players)
         players["ownership_risk_level"] = self._categorize_ownership_risk(players)
-        players["bandwagon_score"] = self._calculate_bandwagon_score(players)
+        players["bandwagon_score"] = np.where(
+            players["id"].isin(new_players), 0.0, self._calculate_bandwagon_score(players)
+        )
 
-        # Meta information - get current gameweek from events
-        events = raw_data.get("events", pd.DataFrame())
-        if not events.empty and "is_current" in events.columns:
-            # is_current is stored as int (0/1), not bool, so use explicit comparison
-            current_gw = events[events["is_current"] == 1]["id"].iloc[0] if any(events["is_current"] == 1) else 1
-        else:
-            current_gw = 1  # Fallback to GW1 if no events data
-
+        # Meta information
         players["gameweek"] = int(current_gw)
         players["last_updated"] = self.calculation_date
 
@@ -531,13 +574,61 @@ class DerivedDataProcessor:
 
         try:
             validated_df = DerivedOwnershipTrendsSchema.validate(derived_ownership)
-            logger.info(f"Processed {len(validated_df)} ownership trends successfully")
+            logger.info(
+                f"Processed {len(validated_df)} ownership trends successfully ({len(new_players)} new players initialized)"
+            )
             return validated_df
         except Exception as e:
             logger.error(f"Ownership trends schema validation failed: {e}")
             return self._create_empty_ownership_trends()
 
     # Helper methods for calculations
+
+    def _identify_new_players(self, players: pd.DataFrame, current_gw: int) -> set:
+        """Identify players that are new this gameweek (no prior gameweek performance history).
+
+        Args:
+            players: DataFrame of current players
+            current_gw: Current gameweek number
+
+        Returns:
+            Set of player IDs that are appearing for the first time
+        """
+        if current_gw <= 1:
+            # GW1: all players are "new" - return empty set to treat all normally
+            return set()
+
+        try:
+            # Query historical gameweek performance data
+            query = text(
+                """
+                SELECT DISTINCT player_id
+                FROM raw_player_gameweek_performance
+                WHERE gameweek < :current_gw
+                """
+            )
+            historical_players_df = pd.read_sql(query, self.session.bind, params={"current_gw": current_gw})
+
+            if historical_players_df.empty:
+                # No historical data available - treat all as existing players
+                logger.warning(
+                    f"No historical gameweek data found before GW{current_gw}, treating all players as existing"
+                )
+                return set()
+
+            # Players in current bootstrap but not in historical performance = new players
+            historical_player_ids = set(historical_players_df["player_id"].values)
+            current_player_ids = set(players["id"].values)
+            new_player_ids = current_player_ids - historical_player_ids
+
+            if new_player_ids:
+                logger.info(f"Identified {len(new_player_ids)} new player(s) in GW{current_gw}: {new_player_ids}")
+
+            return new_player_ids
+
+        except Exception as e:
+            logger.warning(f"Failed to identify new players: {e}. Treating all as existing players.")
+            return set()
 
     def _calculate_value_score(self, players: pd.DataFrame) -> pd.Series:
         """Calculate composite value score (0-100)."""
@@ -822,12 +913,24 @@ class DerivedDataProcessor:
 
     # Value analysis helper methods
 
-    def _calculate_expected_value(self, players: pd.DataFrame) -> pd.Series:
+    def _calculate_expected_value(self, players: pd.DataFrame, new_players: set = None) -> pd.Series:
         """Calculate expected points per pound."""
-        return players["points_per_pound"] * 1.05  # Slight optimism placeholder
+        if new_players is None:
+            new_players = set()
+        # New players get neutral expected value of 0.5
+        return np.where(players["id"].isin(new_players), 0.5, players["points_per_pound"] * 1.05)
 
-    def _calculate_position_percentile(self, players: pd.DataFrame, metric: str) -> pd.Series:
-        """Calculate percentile within position."""
+    def _calculate_position_percentile(self, players: pd.DataFrame, metric: str, new_players: set = None) -> pd.Series:
+        """Calculate percentile within position.
+
+        Args:
+            players: DataFrame of players
+            metric: Column name to calculate percentile for
+            new_players: Set of new player IDs to initialize with neutral 50.0 (median percentile)
+        """
+        if new_players is None:
+            new_players = set()
+
         percentiles = []
         for pos_id in [1, 2, 3, 4]:
             pos_players = players[players["element_type"] == pos_id]
@@ -837,11 +940,18 @@ class DerivedDataProcessor:
             else:
                 percentiles.append(pd.Series(dtype=float))
 
-        return pd.concat(percentiles).reindex(players.index).fillna(50.0)
+        result = pd.concat(percentiles).reindex(players.index).fillna(50.0)
+        # New players get neutral 50.0 percentile (median/average)
+        # Note: Per spec, value_vs_position should be 1.0 for new players, not 50.0
+        # Using 1.0 as specified in the requirements
+        return np.where(players["id"].isin(new_players), 1.0, result)
 
-    def _calculate_price_tier_percentile(self, players: pd.DataFrame) -> pd.Series:
+    def _calculate_price_tier_percentile(self, players: pd.DataFrame, new_players: set = None) -> pd.Series:
         """Calculate percentile within price tier."""
-        return pd.Series(50.0, index=players.index)  # Placeholder
+        if new_players is None:
+            new_players = set()
+        # New players get neutral 1.0 (as specified in requirements)
+        return np.where(players["id"].isin(new_players), 1.0, pd.Series(50.0, index=players.index))
 
     def _predict_price_change(self, players: pd.DataFrame, gameweeks: int) -> pd.Series:
         """Predict price change over gameweeks."""
@@ -886,23 +996,47 @@ class DerivedDataProcessor:
 
     # Ownership trends helper methods
 
-    def _analyze_transfer_momentum(self, players: pd.DataFrame) -> pd.Series:
-        """Analyze transfer momentum."""
+    def _analyze_transfer_momentum(self, players: pd.DataFrame, new_players: set = None) -> pd.Series:
+        """Analyze transfer momentum.
+
+        Args:
+            players: DataFrame of players
+            new_players: Set of new player IDs to initialize with "neutral" momentum
+        """
+        if new_players is None:
+            new_players = set()
+
         net_transfers = players["net_transfers_gw"]
         conditions = [net_transfers > 5000, net_transfers > 1000, net_transfers > -1000, net_transfers > -5000]
         choices = ["accelerating_in", "steady_in", "neutral", "steady_out"]
-        return pd.Series(np.select(conditions, choices, default="accelerating_out"), index=players.index)
+        result = pd.Series(np.select(conditions, choices, default="accelerating_out"), index=players.index)
+
+        # New players always get "neutral" momentum
+        result[players["id"].isin(new_players)] = "neutral"
+        return result
 
     def _calculate_momentum_strength(self, players: pd.DataFrame) -> pd.Series:
         """Calculate momentum strength."""
         return np.minimum(abs(players["net_transfers_gw"]) / 1000.0, 10.0)
 
-    def _categorize_ownership(self, players: pd.DataFrame) -> pd.Series:
-        """Categorize ownership level."""
+    def _categorize_ownership(self, players: pd.DataFrame, new_players: set = None) -> pd.Series:
+        """Categorize ownership level.
+
+        Args:
+            players: DataFrame of players
+            new_players: Set of new player IDs to initialize with "punt" tier (1.0% ownership)
+        """
+        if new_players is None:
+            new_players = set()
+
         ownership = pd.to_numeric(players.get("selected_by_percent", 5.0), errors="coerce").fillna(5.0)
         conditions = [ownership >= 30.0, ownership >= 15.0, ownership >= 5.0, ownership >= 1.0]
         choices = ["template", "popular", "mid_owned", "differential"]
-        return pd.Series(np.select(conditions, choices, default="punt"), index=players.index)
+        result = pd.Series(np.select(conditions, choices, default="punt"), index=players.index)
+
+        # New players default to "punt" tier (very low ownership)
+        result[players["id"].isin(new_players)] = "punt"
+        return result
 
     def _categorize_ownership_risk(self, players: pd.DataFrame) -> pd.Series:
         """Categorize ownership risk level."""
