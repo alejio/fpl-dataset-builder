@@ -409,6 +409,9 @@ class DerivedDataProcessor:
         # Identify new players (no historical gameweek performance data)
         new_players = self._identify_new_players(players, current_gw)
 
+        # Backfill previous gameweek data for new players (for shift(1) compatibility)
+        backfill_records = self._create_new_player_backfill_value(players, new_players, current_gw)
+
         players["current_price"] = players["now_cost"] / 10.0
 
         # Handle negative total points for schema compliance
@@ -490,8 +493,14 @@ class DerivedDataProcessor:
 
         try:
             validated_df = DerivedValueAnalysisSchema.validate(derived_value)
+
+            # Save backfill records separately (directly to database)
+            if backfill_records:
+                self._save_backfill_records_to_db("derived_value_analysis", backfill_records)
+
             logger.info(
-                f"Processed {len(validated_df)} value analysis records successfully ({len(new_players)} new players initialized)"
+                f"Processed {len(validated_df)} value analysis records successfully "
+                f"({len(new_players)} new players initialized, {len(backfill_records)} backfill records saved separately)"
             )
             return validated_df
         except Exception as e:
@@ -513,6 +522,9 @@ class DerivedDataProcessor:
 
         # Identify new players (no historical gameweek performance data)
         new_players = self._identify_new_players(players, current_gw)
+
+        # Backfill previous gameweek data for new players (for shift(1) compatibility)
+        backfill_records = self._create_new_player_backfill_ownership(players, new_players, current_gw)
 
         # Transfer metrics
         players["transfers_in_gw"] = players.get("transfers_in_event", 0).fillna(0).astype(int)
@@ -574,8 +586,14 @@ class DerivedDataProcessor:
 
         try:
             validated_df = DerivedOwnershipTrendsSchema.validate(derived_ownership)
+
+            # Save backfill records separately (directly to database)
+            if backfill_records:
+                self._save_backfill_records_to_db("derived_ownership_trends", backfill_records)
+
             logger.info(
-                f"Processed {len(validated_df)} ownership trends successfully ({len(new_players)} new players initialized)"
+                f"Processed {len(validated_df)} ownership trends successfully "
+                f"({len(new_players)} new players initialized, {len(backfill_records)} backfill records saved separately)"
             )
             return validated_df
         except Exception as e:
@@ -629,6 +647,170 @@ class DerivedDataProcessor:
         except Exception as e:
             logger.warning(f"Failed to identify new players: {e}. Treating all as existing players.")
             return set()
+
+    def _create_new_player_backfill_ownership(
+        self, players: pd.DataFrame, new_players: set, current_gw: int
+    ) -> list[dict]:
+        """Create backfill records for new players for ALL previous gameweeks.
+
+        When a player joins in GW N, create GW 1 through N-1 records with neutral defaults.
+        This ensures ML training pipelines can use full historical context.
+
+        Args:
+            players: DataFrame of current players
+            new_players: Set of new player IDs
+            current_gw: Current gameweek number
+
+        Returns:
+            List of dictionaries representing GW 1 to N-1 records for new players
+        """
+        if not new_players or current_gw <= 1:
+            return []
+
+        backfill_records = []
+
+        for player_id in new_players:
+            player = players[players["id"] == player_id]
+            if player.empty:
+                continue
+
+            player_row = player.iloc[0]
+
+            # Create records for ALL gameweeks from 1 to current_gw - 1
+            for gw in range(1, current_gw):
+                backfill_records.append(
+                    {
+                        "player_id": int(player_id),
+                        "web_name": player_row["web_name"],
+                        "selected_by_percent": 1.0,  # Low ownership for new players
+                        "transfers_in_gw": 0,
+                        "transfers_out_gw": 0,
+                        "net_transfers_gw": 0,
+                        "avg_transfers_in_5gw": 0.0,
+                        "avg_transfers_out_5gw": 0.0,
+                        "avg_net_transfers_5gw": 0.0,
+                        "transfer_momentum": "neutral",
+                        "momentum_strength": 0.0,
+                        "ownership_velocity": 0.0,
+                        "ownership_tier": "punt",
+                        "ownership_risk_level": "low",
+                        "bandwagon_score": 0.0,
+                        "gameweek": gw,
+                        "last_updated": self.calculation_date,
+                    }
+                )
+
+        if backfill_records:
+            logger.info(
+                f"Created {len(backfill_records)} backfill ownership records for GW1-{current_gw - 1} "
+                f"({len(new_players)} new players joining in GW{current_gw})"
+            )
+
+        return backfill_records
+
+    def _create_new_player_backfill_value(self, players: pd.DataFrame, new_players: set, current_gw: int) -> list[dict]:
+        """Create backfill value analysis records for new players for ALL previous gameweeks.
+
+        When a player joins in GW N, create GW 1 through N-1 records with neutral defaults.
+        This ensures ML training pipelines can use full historical context.
+
+        Args:
+            players: DataFrame of current players
+            new_players: Set of new player IDs
+            current_gw: Current gameweek number
+
+        Returns:
+            List of dictionaries representing GW 1 to N-1 records for new players
+        """
+        if not new_players or current_gw <= 1:
+            return []
+
+        backfill_records = []
+
+        for player_id in new_players:
+            player = players[players["id"] == player_id]
+            if player.empty:
+                continue
+
+            player_row = player.iloc[0]
+
+            # Create records for ALL gameweeks from 1 to current_gw - 1
+            for gw in range(1, current_gw):
+                backfill_records.append(
+                    {
+                        "player_id": int(player_id),
+                        "web_name": player_row["web_name"],
+                        "position_id": int(player_row["element_type"]),
+                        "current_price": float(player_row["now_cost"]) / 10.0,
+                        "total_points": 0,
+                        "points_per_pound": 0.5,  # Neutral value
+                        "expected_points_per_pound": 0.5,
+                        "value_vs_position": 1.0,  # Average
+                        "value_vs_price_tier": 1.0,
+                        "predicted_price_change_1gw": 0.0,
+                        "predicted_price_change_5gw": 0.0,
+                        "price_volatility": 0.0,
+                        "buy_rating": 5.0,  # Neutral
+                        "sell_rating": 5.0,  # Neutral
+                        "hold_rating": 5.0,  # Neutral
+                        "ownership_risk": 0.0,
+                        "price_risk": 0.0,
+                        "performance_risk": 0.3,
+                        "recommendation": "hold",
+                        "confidence": 0.5,
+                        "gameweek": gw,
+                        "analysis_date": self.calculation_date,
+                        "model_version": CALCULATION_VERSION,
+                    }
+                )
+
+        if backfill_records:
+            logger.info(
+                f"Created {len(backfill_records)} backfill value analysis records for GW1-{current_gw - 1} "
+                f"({len(new_players)} new players joining in GW{current_gw})"
+            )
+
+        return backfill_records
+
+    def _save_backfill_records_to_db(self, table_name: str, records: list[dict]):
+        """Save backfill records directly to database (bypass schema validation).
+
+        Uses INSERT OR IGNORE to skip existing records (idempotent).
+
+        Args:
+            table_name: Target table name
+            records: List of record dictionaries to insert
+        """
+        if not records:
+            return
+
+        try:
+            df = pd.DataFrame(records)
+
+            # Use pandas to_sql with custom method for INSERT OR IGNORE
+            def insert_or_ignore(table, conn, keys, data_iter):
+                """Custom insert method that uses INSERT OR IGNORE."""
+                from sqlalchemy import text as sql_text
+
+                columns = ", ".join(keys)
+                placeholders = ", ".join([f":{k}" for k in keys])
+                insert_sql = f"INSERT OR IGNORE INTO {table.name} ({columns}) VALUES ({placeholders})"
+
+                for data in data_iter:
+                    conn.execute(sql_text(insert_sql), dict(zip(keys, data, strict=False)))
+
+            # Execute batch insert with custom method
+            df.to_sql(
+                table_name,
+                self.session.bind,
+                if_exists="append",
+                index=False,
+                method=insert_or_ignore,
+            )
+
+            logger.info(f"✅ Saved {len(records)} backfill records to {table_name} (duplicates skipped)")
+        except Exception as e:
+            logger.warning(f"Failed to save backfill records to {table_name}: {e}")
 
     def _calculate_value_score(self, players: pd.DataFrame) -> pd.Series:
         """Calculate composite value score (0-100)."""
