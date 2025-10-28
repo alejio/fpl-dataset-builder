@@ -498,10 +498,16 @@ class DerivedDataProcessor:
             if backfill_records:
                 self._save_backfill_records_to_db("derived_value_analysis", backfill_records)
 
-            logger.info(
-                f"Processed {len(validated_df)} value analysis records successfully "
-                f"({len(new_players)} new players initialized, {len(backfill_records)} backfill records saved separately)"
-            )
+            if new_players:
+                logger.warning(
+                    f"✅ Value analysis processing complete for GW{current_gw}:\n"
+                    f"   - Current GW: {len(validated_df)} records processed\n"
+                    f"   - New players: {len(new_players)} initialized with neutral values\n"
+                    f"   - Backfill: {len(backfill_records)} historical records saved to database"
+                )
+            else:
+                logger.info(f"Processed {len(validated_df)} value analysis records successfully")
+
             return validated_df
         except Exception as e:
             logger.error(f"Value analysis schema validation failed: {e}")
@@ -591,10 +597,16 @@ class DerivedDataProcessor:
             if backfill_records:
                 self._save_backfill_records_to_db("derived_ownership_trends", backfill_records)
 
-            logger.info(
-                f"Processed {len(validated_df)} ownership trends successfully "
-                f"({len(new_players)} new players initialized, {len(backfill_records)} backfill records saved separately)"
-            )
+            if new_players:
+                logger.warning(
+                    f"✅ Ownership trends processing complete for GW{current_gw}:\n"
+                    f"   - Current GW: {len(validated_df)} records processed\n"
+                    f"   - New players: {len(new_players)} initialized with neutral values\n"
+                    f"   - Backfill: {len(backfill_records)} historical records saved to database"
+                )
+            else:
+                logger.info(f"Processed {len(validated_df)} ownership trends successfully")
+
             return validated_df
         except Exception as e:
             logger.error(f"Ownership trends schema validation failed: {e}")
@@ -640,7 +652,16 @@ class DerivedDataProcessor:
             new_player_ids = current_player_ids - historical_player_ids
 
             if new_player_ids:
-                logger.info(f"Identified {len(new_player_ids)} new player(s) in GW{current_gw}: {new_player_ids}")
+                # Get player names for better logging
+                new_player_details = players[players["id"].isin(new_player_ids)][["id", "web_name"]].to_dict("records")
+                player_names = [f"{p['web_name']} (ID: {p['id']})" for p in new_player_details]
+
+                logger.warning(
+                    f"⚠️  DETECTED {len(new_player_ids)} NEW PLAYER(S) IN GW{current_gw}:\n"
+                    f"   Players: {', '.join(player_names)}\n"
+                    f"   These players have no historical gameweek performance data.\n"
+                    f"   Backfill records will be created for GW1-{current_gw - 1} with neutral default values."
+                )
 
             return new_player_ids
 
@@ -701,9 +722,11 @@ class DerivedDataProcessor:
                 )
 
         if backfill_records:
+            records_per_player = current_gw - 1
             logger.info(
-                f"Created {len(backfill_records)} backfill ownership records for GW1-{current_gw - 1} "
-                f"({len(new_players)} new players joining in GW{current_gw})"
+                f"📦 Created {len(backfill_records)} backfill OWNERSHIP records:\n"
+                f"   - {len(new_players)} new player(s) × {records_per_player} gameweeks (GW1-{current_gw - 1})\n"
+                f"   - Default values: 1.0% ownership, 0 transfers, 'neutral' momentum, 'punt' tier"
             )
 
         return backfill_records
@@ -765,9 +788,11 @@ class DerivedDataProcessor:
                 )
 
         if backfill_records:
+            records_per_player = current_gw - 1
             logger.info(
-                f"Created {len(backfill_records)} backfill value analysis records for GW1-{current_gw - 1} "
-                f"({len(new_players)} new players joining in GW{current_gw})"
+                f"📦 Created {len(backfill_records)} backfill VALUE ANALYSIS records:\n"
+                f"   - {len(new_players)} new player(s) × {records_per_player} gameweeks (GW1-{current_gw - 1})\n"
+                f"   - Default values: 0.5 points/pound, neutral ratings (5.0), 'hold' recommendation"
             )
 
         return backfill_records
@@ -808,9 +833,12 @@ class DerivedDataProcessor:
                 method=insert_or_ignore,
             )
 
-            logger.info(f"✅ Saved {len(records)} backfill records to {table_name} (duplicates skipped)")
+            logger.warning(
+                f"✅ BACKFILL COMPLETE: Saved {len(records)} records to [{table_name}]\n"
+                f"   Database now contains historical data for new players (duplicates auto-skipped)"
+            )
         except Exception as e:
-            logger.warning(f"Failed to save backfill records to {table_name}: {e}")
+            logger.error(f"❌ BACKFILL FAILED: Could not save records to {table_name}: {e}")
 
     def _calculate_value_score(self, players: pd.DataFrame) -> pd.Series:
         """Calculate composite value score (0-100)."""
