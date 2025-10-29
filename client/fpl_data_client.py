@@ -299,6 +299,9 @@ class FPLDataClient:
             - now_cost: Player price at snapshot time
             - ep_this, ep_next: Expected points from FPL API
             - form: Form rating at snapshot time
+            - penalties_order: Penalty taker priority (1-4, 0=None) at snapshot time
+            - corners_and_indirect_freekicks_order: Corners/indirect FK priority (1-4, 0=None)
+            - direct_freekicks_order: Direct freekick priority (1-4, 0=None)
             - is_backfilled: Whether this is real data or inferred
 
         Example:

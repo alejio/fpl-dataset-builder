@@ -581,6 +581,11 @@ class RawPlayerGameweekSnapshot(Base):
     # Form at snapshot time
     form: Mapped[str | None] = mapped_column(String(10), nullable=True)
 
+    # Set piece responsibilities at snapshot time
+    penalties_order: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    corners_and_indirect_freekicks_order: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    direct_freekicks_order: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
     # Backfill flag to distinguish real captures from inferred data
     is_backfilled: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
 

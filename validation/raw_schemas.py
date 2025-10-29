@@ -484,6 +484,13 @@ class RawPlayerGameweekSnapshotSchema(pa.DataFrameModel):
     # Form at snapshot time
     form: Series[str] = pa.Field(str_length={"min_value": 0}, nullable=True)
 
+    # Set piece responsibilities at snapshot time
+    penalties_order: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=0, le=10)  # FPL can have higher values
+    corners_and_indirect_freekicks_order: Series[pd.Int64Dtype] = pa.Field(
+        nullable=True, ge=0, le=10
+    )  # FPL can have higher values
+    direct_freekicks_order: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=0, le=10)  # FPL can have higher values
+
     # Backfill flag to distinguish real captures from inferred data
     is_backfilled: Series[bool]
 

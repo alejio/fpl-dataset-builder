@@ -678,6 +678,10 @@ def process_player_gameweek_snapshot(
             "ep_next": player.get("ep_next", "0.0"),
             # Form at snapshot time
             "form": player.get("form", "0.0"),
+            # Set piece responsibilities at snapshot time
+            "penalties_order": player.get("penalties_order"),
+            "corners_and_indirect_freekicks_order": player.get("corners_and_indirect_freekicks_order"),
+            "direct_freekicks_order": player.get("direct_freekicks_order"),
             # Backfill flag
             "is_backfilled": is_backfilled,
             # Metadata
