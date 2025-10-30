@@ -255,3 +255,48 @@ class DerivedOwnershipTrends(Base):
 
     # Meta information (gameweek moved to composite primary key above)
     last_updated: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.now)
+
+
+class DerivedBettingFeatures(Base):
+    """Betting-odds-derived fixture-player features.
+
+    Composite PK: (player_id, fixture_id). Indexed by gameweek, fixture_id, is_home.
+    """
+
+    __tablename__ = "derived_betting_features"
+
+    # Identification
+    player_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    fixture_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    __table_args__ = (PrimaryKeyConstraint("player_id", "fixture_id"),)
+
+    gameweek: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    is_home: Mapped[bool] = mapped_column(Boolean, nullable=False, index=True)
+
+    # Implied probabilities
+    team_win_probability: Mapped[float] = mapped_column(Float, nullable=False)
+    opponent_win_probability: Mapped[float] = mapped_column(Float, nullable=False)
+    draw_probability: Mapped[float] = mapped_column(Float, nullable=False)
+
+    # Expected scoring and defense
+    implied_clean_sheet_probability: Mapped[float] = mapped_column(Float, nullable=False)
+    implied_total_goals: Mapped[float] = mapped_column(Float, nullable=False)
+    team_expected_goals: Mapped[float] = mapped_column(Float, nullable=False)
+
+    # Market confidence
+    market_consensus_strength: Mapped[float] = mapped_column(Float, nullable=False)
+    odds_movement_team: Mapped[float] = mapped_column(Float, nullable=False)
+    odds_movement_magnitude: Mapped[float] = mapped_column(Float, nullable=False)
+    favorite_status: Mapped[float] = mapped_column(Float, nullable=False)
+
+    # Asian handicap
+    asian_handicap_line: Mapped[float] = mapped_column(Float, nullable=False)
+    handicap_team_odds: Mapped[float] = mapped_column(Float, nullable=False)
+    expected_goal_difference: Mapped[float] = mapped_column(Float, nullable=False)
+
+    # Match context
+    over_under_signal: Mapped[float] = mapped_column(Float, nullable=False)
+    referee_encoded: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    # Meta
+    as_of_utc: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.now)

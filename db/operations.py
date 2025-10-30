@@ -869,6 +869,7 @@ class DatabaseOperations:
             "derived_fixture_difficulty": self.save_derived_fixture_difficulty,
             "derived_value_analysis": self.save_derived_value_analysis,
             "derived_ownership_trends": self.save_derived_ownership_trends,
+            "derived_betting_features": self.save_derived_betting_features,
         }
 
         for table_name, df in derived_dataframes.items():
@@ -890,6 +891,44 @@ class DatabaseOperations:
         with next(get_session()) as session:
             query_result = session.query(models_derived.DerivedOwnershipTrends).all()
             return model_to_dataframe(models_derived.DerivedOwnershipTrends, query_result)
+
+    def save_derived_betting_features(self, df: pd.DataFrame) -> None:
+        """Save derived betting features DataFrame to database.
+
+        Per-gameweek update: deletes existing data for the specific gameweek
+        before inserting new data, preserving historical gameweeks.
+        """
+        with next(get_session()) as session:
+            if not df.empty:
+                # Prefer precise deletion by incoming fixture_ids to avoid unique conflicts
+                fixture_ids = df["fixture_id"].dropna().unique().tolist()
+                if fixture_ids:
+                    deleted_count = (
+                        session.query(models_derived.DerivedBettingFeatures)
+                        .filter(models_derived.DerivedBettingFeatures.fixture_id.in_(fixture_ids))
+                        .delete(synchronize_session=False)
+                    )
+                    session.flush()
+                    if deleted_count > 0:
+                        print(f"  🗑️ Deleted {deleted_count} existing betting features for {len(fixture_ids)} fixtures")
+
+            df_converted = convert_datetime_columns(df, ["as_of_utc"])
+            records = df_converted.to_dict("records")
+            session.bulk_insert_mappings(models_derived.DerivedBettingFeatures, records)
+            session.commit()
+
+    def get_derived_betting_features(self, gameweek: int | None = None) -> pd.DataFrame:
+        """Get derived betting features as DataFrame.
+
+        Args:
+            gameweek: Optional gameweek filter
+        """
+        with next(get_session()) as session:
+            query = session.query(models_derived.DerivedBettingFeatures)
+            if gameweek is not None:
+                query = query.filter(models_derived.DerivedBettingFeatures.gameweek == gameweek)
+            query_result = query.all()
+            return model_to_dataframe(models_derived.DerivedBettingFeatures, query_result)
 
     def get_database_summary(self) -> dict[str, int]:
         """Get comprehensive database summary with row counts for all tables."""
@@ -918,6 +957,7 @@ class DatabaseOperations:
                 ("derived_fixture_difficulty", models_derived.DerivedFixtureDifficulty),
                 ("derived_value_analysis", models_derived.DerivedValueAnalysis),
                 ("derived_ownership_trends", models_derived.DerivedOwnershipTrends),
+                ("derived_betting_features", models_derived.DerivedBettingFeatures),
             ]
 
             all_tables = raw_tables + derived_tables
@@ -993,6 +1033,7 @@ class DatabaseOperations:
                 ("derived_fixture_difficulty", models_derived.DerivedFixtureDifficulty, "calculation_date"),
                 ("derived_value_analysis", models_derived.DerivedValueAnalysis, "analysis_date"),
                 ("derived_ownership_trends", models_derived.DerivedOwnershipTrends, "last_updated"),
+                ("derived_betting_features", models_derived.DerivedBettingFeatures, "as_of_utc"),
             ]
 
             # Query derived data timestamps

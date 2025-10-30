@@ -249,9 +249,7 @@ class TestTableClientCoverage:
         missing_models = set(table_to_method_mapping.keys()) - model_table_names
         assert not missing_models, f"Mapped tables without models: {missing_models}"
 
-    def test_comprehensive_coverage_report(
-        self, expected_tables, table_to_method_mapping, client, capsys
-    ):
+    def test_comprehensive_coverage_report(self, expected_tables, table_to_method_mapping, client, capsys):
         """Generate comprehensive coverage report for documentation."""
         print("\n" + "=" * 80)
         print("DATABASE TABLE TO CLIENT METHOD COVERAGE REPORT")
@@ -316,9 +314,7 @@ class TestClientMethodSignatures:
         sig = inspect.signature(client.get_player_availability_snapshot)
         params = list(sig.parameters.keys())
         assert "gameweek" in params, "get_player_availability_snapshot should accept gameweek"
-        assert (
-            "include_backfilled" in params
-        ), "get_player_availability_snapshot should accept include_backfilled"
+        assert "include_backfilled" in params, "get_player_availability_snapshot should accept include_backfilled"
 
         # Test get_player_snapshots_history signature
         sig = inspect.signature(client.get_player_snapshots_history)

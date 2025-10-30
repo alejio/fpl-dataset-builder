@@ -252,3 +252,48 @@ class DerivedOwnershipTrendsSchema(pa.DataFrameModel):
         """Pandera configuration for ownership trends."""
 
         coerce = True
+
+
+class DerivedBettingFeaturesSchema(pa.DataFrameModel):
+    """Betting-odds-derived fixture-player features.
+
+    Rows are player-perspective per fixture (home/away expansion of fixture-level odds).
+    All probability features are in 0.0-1.0 range; other metrics have bounded domains.
+    """
+
+    # Core identification
+    gameweek: Series[int] = pa.Field(ge=1, le=38)
+    fixture_id: Series[int] = pa.Field(ge=1)
+    player_id: Series[int] = pa.Field(ge=1)
+    is_home: Series[bool]
+
+    # Implied probabilities (normalized)
+    team_win_probability: Series[float] = pa.Field(ge=0.0, le=1.0)
+    opponent_win_probability: Series[float] = pa.Field(ge=0.0, le=1.0)
+    draw_probability: Series[float] = pa.Field(ge=0.0, le=1.0)
+
+    # Expected scoring and defense
+    implied_clean_sheet_probability: Series[float] = pa.Field(ge=0.0, le=1.0)
+    implied_total_goals: Series[float] = pa.Field(ge=0.0, le=10.0)
+    team_expected_goals: Series[float] = pa.Field(ge=0.0, le=10.0)
+
+    # Market confidence
+    market_consensus_strength: Series[float] = pa.Field(ge=0.0, le=1.0)
+    odds_movement_team: Series[float]  # Closing - opening (in odds space)
+    odds_movement_magnitude: Series[float] = pa.Field(ge=0.0)
+    favorite_status: Series[float] = pa.Field(ge=0.0, le=1.0)
+
+    # Asian handicap features (team perspective)
+    asian_handicap_line: Series[float]
+    handicap_team_odds: Series[float] = pa.Field(ge=1.0)
+    expected_goal_difference: Series[float]
+
+    # Match context
+    over_under_signal: Series[float]
+    referee_encoded: Series[int]
+
+    # Meta
+    as_of_utc: Series[pd.Timestamp]
+
+    class Config:
+        coerce = True

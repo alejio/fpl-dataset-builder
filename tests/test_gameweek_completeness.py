@@ -76,9 +76,7 @@ class TestGameweekCompleteness:
         assert last_completed_gameweek is not None, "Could not determine last completed gameweek"
         assert last_completed_gameweek >= 0, f"Invalid gameweek number: {last_completed_gameweek}"
 
-    def test_player_gameweek_performance_complete(
-        self, client, expected_gameweeks, last_completed_gameweek
-    ):
+    def test_player_gameweek_performance_complete(self, client, expected_gameweeks, last_completed_gameweek):
         """Test that raw_player_gameweek_performance has data for all completed gameweeks."""
         if not expected_gameweeks:
             pytest.skip("No completed gameweeks yet")
@@ -102,13 +100,9 @@ class TestGameweekCompleteness:
         # Verify we have player data for each gameweek
         for gw in expected_gameweeks:
             gw_data = performance[performance["gameweek"] == gw]
-            assert (
-                len(gw_data) > 0
-            ), f"No players found for GW{gw} in raw_player_gameweek_performance"
+            assert len(gw_data) > 0, f"No players found for GW{gw} in raw_player_gameweek_performance"
 
-    def test_player_gameweek_snapshot_complete(
-        self, client, expected_gameweeks, last_completed_gameweek
-    ):
+    def test_player_gameweek_snapshot_complete(self, client, expected_gameweeks, last_completed_gameweek):
         """Test that raw_player_gameweek_snapshot has data for all completed gameweeks."""
         if not expected_gameweeks:
             pytest.skip("No completed gameweeks yet")
@@ -168,9 +162,7 @@ class TestGameweekCompleteness:
             pick_count = len(gw_picks)
 
             # Should have exactly 15 picks per gameweek
-            assert (
-                pick_count == 15
-            ), f"Expected 15 picks for GW{gw}, found {pick_count} in raw_my_picks"
+            assert pick_count == 15, f"Expected 15 picks for GW{gw}, found {pick_count} in raw_my_picks"
 
     def test_no_future_gameweek_data(self, client, last_completed_gameweek):
         """Test that we don't have excessive future gameweek data.
@@ -230,9 +222,7 @@ class TestGameweekCompleteness:
             },
             {
                 "name": "raw_player_gameweek_snapshot",
-                "get_method": lambda: client.get_player_snapshots_history(
-                    start_gw=1, end_gw=last_completed_gameweek
-                ),
+                "get_method": lambda: client.get_player_snapshots_history(start_gw=1, end_gw=last_completed_gameweek),
                 "gw_column": "gameweek",
                 "required": False,
                 "description": "Player availability snapshots",
@@ -319,9 +309,7 @@ class TestGameweekCompleteness:
                     print(f"{table_name}:")
                     print(f"  Status: {status}")
                     print(f"  Description: {table_info['description']}")
-                    print(
-                        f"  Gameweeks: GW{min(actual_gws)}-{max(actual_gws)} ({len(actual_gws)} gameweeks)"
-                    )
+                    print(f"  Gameweeks: GW{min(actual_gws)}-{max(actual_gws)} ({len(actual_gws)} gameweeks)")
                     print(f"  Rows per GW: {min_rows}-{max_rows} (avg: {avg_rows})")
 
                     if missing_gws:

@@ -13,6 +13,7 @@ from sqlalchemy import text
 
 from db.database import SessionLocal
 from validation.derived_schemas import (
+    DerivedBettingFeaturesSchema,
     DerivedFixtureDifficultySchema,
     DerivedOwnershipTrendsSchema,
     DerivedPlayerMetricsSchema,
@@ -27,6 +28,43 @@ CALCULATION_VERSION = "v1.0.0"
 POSITIONS = {1: "GKP", 2: "DEF", 3: "MID", 4: "FWD"}
 FORM_GAMES = 5  # Number of games for form calculations
 VALUE_CONFIDENCE_THRESHOLD = 0.7  # Minimum confidence for value recommendations
+
+
+def devig_two_way_probability(odds_a: float | None, odds_b: float | None) -> float:
+    """Return de-vigged probability for outcome A given two-way decimal odds.
+
+    Uses proportional normalization of implied probabilities: p=1/odds.
+    Returns NaN if inputs are missing or non-positive.
+    """
+    if odds_a is None or odds_b is None:
+        return np.nan
+    if odds_a <= 0 or odds_b <= 0:
+        return np.nan
+    p_a_raw = 1.0 / float(odds_a)
+    p_b_raw = 1.0 / float(odds_b)
+    total = p_a_raw + p_b_raw
+    if total <= 0:
+        return np.nan
+    return float(p_a_raw / total)
+
+
+def lambda_from_over25_prob(p_over: float, max_lambda: float = 8.0) -> float:
+    """Solve for total-goals Poisson λ from P(N >= 3) = p_over.
+
+    Uses binary search on λ with the identity: P(N >= 3) = 1 - e^{-λ}(1 + λ + λ^2/2).
+    """
+    if np.isnan(p_over):
+        return np.nan
+    target = float(np.clip(p_over, 1e-6, 1 - 1e-6))
+    lo, hi = 0.0, max_lambda
+    for _ in range(40):
+        mid = (lo + hi) / 2.0
+        p_mid = 1.0 - np.exp(-mid) * (1.0 + mid + (mid * mid) / 2.0)
+        if p_mid < target:
+            lo = mid
+        else:
+            hi = mid
+    return (lo + hi) / 2.0
 
 
 class DerivedDataProcessor:
@@ -85,6 +123,9 @@ class DerivedDataProcessor:
             # Fixture-focused metrics
             derived_data["derived_fixture_difficulty"] = self._process_fixture_difficulty(raw_data)
 
+            # Betting-odds features expanded to player level
+            derived_data["derived_betting_features"] = self._process_betting_features(raw_data)
+
             logger.info(f"Derived data processing completed successfully: {list(derived_data.keys())}")
             return derived_data
 
@@ -95,6 +136,380 @@ class DerivedDataProcessor:
             logger.error(f"Full traceback:\n{traceback.format_exc()}")
             # Return empty datasets with correct schemas on failure
             return self._create_empty_derived_datasets()
+
+    def _process_betting_features(self, raw_data: dict[str, pd.DataFrame]) -> pd.DataFrame:
+        """Process betting-odds features at fixture level, expand to players.
+
+        Uses closing market averages where available, falls back to Bet365 closing,
+        then to opening averages. Applies neutral defaults when data missing.
+        """
+        logger.info("Processing betting-odds features...")
+
+        # Load odds directly from DB (joined as needed later)
+        try:
+            odds_df = pd.read_sql(text("SELECT * FROM raw_betting_odds"), self.session.bind)
+        except Exception as e:
+            logger.warning(f"Failed to load raw_betting_odds: {e}")
+            return self._create_empty_betting_features()
+
+        fixtures = raw_data.get("fixtures", pd.DataFrame()).copy()
+        players = raw_data.get("players", pd.DataFrame()).copy()
+
+        if odds_df.empty or fixtures.empty or players.empty:
+            logger.warning("Insufficient data for betting features (odds/fixtures/players)")
+            return self._create_empty_betting_features()
+
+        # Build minimal fixture frame
+        fx = fixtures.rename(
+            columns={
+                "id": "fixture_id",
+                "event": "gameweek",
+                "team_h": "home_team_id",
+                "team_a": "away_team_id",
+                "kickoff_time": "kickoff_time",
+            }
+        )[["fixture_id", "gameweek", "home_team_id", "away_team_id", "kickoff_time"]].copy()
+
+        # Merge odds with fixtures on fixture_id for gameweek and teams context
+        df = odds_df.merge(fx, on="fixture_id", how="inner", validate="one_to_one")
+
+        # Normalize overlapping columns from merge (avoid _x/_y suffix issues)
+        def _normalize_column(merged: pd.DataFrame, base: str, prefer: str = "right") -> pd.Series:
+            left = f"{base}_x"
+            right = f"{base}_y"
+            if prefer == "right" and right in merged.columns:
+                return merged[right]
+            if prefer == "left" and left in merged.columns:
+                return merged[left]
+            if right in merged.columns:
+                return merged[right]
+            if left in merged.columns:
+                return merged[left]
+            return merged[base] if base in merged.columns else pd.Series([np.nan] * len(merged))
+
+        # Prefer fixture-side values for team ids, gameweek, kickoff_time
+        if any(c in df.columns for c in ["home_team_id_x", "home_team_id_y", "home_team_id"]):
+            df["home_team_id"] = _normalize_column(df, "home_team_id", prefer="right").astype("Int64")
+        if any(c in df.columns for c in ["away_team_id_x", "away_team_id_y", "away_team_id"]):
+            df["away_team_id"] = _normalize_column(df, "away_team_id", prefer="right").astype("Int64")
+        if any(c in df.columns for c in ["gameweek_x", "gameweek_y", "gameweek"]):
+            df["gameweek"] = _normalize_column(df, "gameweek", prefer="right").astype("Int64")
+        if any(c in df.columns for c in ["kickoff_time_x", "kickoff_time_y", "kickoff_time"]):
+            df["kickoff_time"] = _normalize_column(df, "kickoff_time", prefer="right")
+
+        if df.empty:
+            logger.warning("No matching fixtures found for betting odds")
+            return self._create_empty_betting_features()
+
+        # Helper: pick closing market avg else Bet365 closing else opening avg
+        def select_team_odds(row, side_prefix: str) -> dict:
+            # side_prefix: 'H' for home, 'A' for away
+            avg_close = row.get(f"AvgC{side_prefix}")
+            b365_close = row.get(f"B365C{side_prefix}")
+            avg_open = row.get(f"Avg{side_prefix}")
+            # Normalize potential None
+            selected = None
+            if pd.notna(avg_close):
+                selected = float(avg_close)
+            elif pd.notna(b365_close):
+                selected = float(b365_close)
+            elif pd.notna(avg_open):
+                selected = float(avg_open)
+            return {
+                "odds": selected,
+                "open": float(row.get(f"Avg{side_prefix}") or np.nan),
+                "close": float(row.get(f"AvgC{side_prefix}") or (row.get(f"B365C{side_prefix}") or np.nan)),
+                "b365_open": float(row.get(f"B365{side_prefix}") or np.nan),
+            }
+
+        # Helper: over/under selection (use market averages where possible)
+        def select_over_under(row) -> tuple[float | None, float | None]:
+            over = row.get("Avg_over_2_5")
+            under = row.get("Avg_under_2_5")
+            if pd.isna(over) or pd.isna(under):
+                over = row.get("B365_over_2_5")
+                under = row.get("B365_under_2_5")
+            if pd.isna(over) or pd.isna(under):
+                return None, None
+            return float(over), float(under)
+
+        # Compute fixture-level features for both team perspectives
+        records: list[dict] = []
+
+        DEFAULTS = {
+            "team_win_probability": 0.33,
+            "opponent_win_probability": 0.33,
+            "draw_probability": 0.33,
+            "implied_clean_sheet_probability": 0.35,
+            "implied_total_goals": 2.5,
+            "team_expected_goals": 1.25,
+            "market_consensus_strength": 0.5,
+            "odds_movement_team": 0.0,
+            "odds_movement_magnitude": 0.0,
+            "favorite_status": 0.5,
+            "asian_handicap_line": 0.0,
+            "handicap_team_odds": 2.0,
+            "expected_goal_difference": 0.0,
+            "over_under_signal": 0.0,
+            "referee_encoded": -1,
+        }
+
+        HANDICAP_STRENGTH_FACTOR = 1.0
+
+        # Helper functions defined at module scope for testability
+
+        for _, row in df.iterrows():
+            # Select odds for home/away
+            home_sel = select_team_odds(row, "H")
+            away_sel = select_team_odds(row, "A")
+            draw_close = row.get("AvgCD") if pd.notna(row.get("AvgCD")) else row.get("B365CD")
+
+            # Implied probabilities (unnormalized)
+            p_home = 1.0 / home_sel["odds"] if home_sel["odds"] and home_sel["odds"] > 0 else np.nan
+            p_away = 1.0 / away_sel["odds"] if away_sel["odds"] and away_sel["odds"] > 0 else np.nan
+            p_draw = 1.0 / draw_close if draw_close and draw_close > 0 else np.nan
+
+            # Normalize
+            if not np.isnan(p_home) and not np.isnan(p_away) and not np.isnan(p_draw):
+                total = p_home + p_draw + p_away
+                if total > 0:
+                    p_home_n = p_home / total
+                    p_draw_n = p_draw / total
+                    p_away_n = p_away / total
+                else:
+                    p_home_n = p_draw_n = p_away_n = np.nan
+            else:
+                p_home_n = p_draw_n = p_away_n = np.nan
+
+            # Implied total goals from over/under via de-vigged probability and Poisson inversion
+            over_25, under_25 = select_over_under(row)
+            p_over_25 = devig_two_way_probability(over_25, under_25)
+            implied_total_goals = lambda_from_over25_prob(p_over_25) if not np.isnan(p_over_25) else np.nan
+
+            # Split expected goals between teams: share = win + 0.5*draw; normalize shares
+            if (
+                not np.isnan(p_home_n)
+                and not np.isnan(p_away_n)
+                and not np.isnan(p_draw_n)
+                and not np.isnan(implied_total_goals)
+            ):
+                home_share = p_home_n + 0.5 * p_draw_n
+                away_share = p_away_n + 0.5 * p_draw_n
+                denom = home_share + away_share
+                if denom > 0:
+                    home_xg = implied_total_goals * (home_share / denom)
+                    away_xg = implied_total_goals * (away_share / denom)
+                else:
+                    home_xg = away_xg = np.nan
+            else:
+                home_xg = away_xg = np.nan
+
+            # Clean sheet proxy
+            def cs_prob(total_goals: float | float, team_share: float | float) -> float:
+                if np.isnan(total_goals) or np.isnan(team_share):
+                    return np.nan
+                return float(np.clip(1.0 - (total_goals * team_share * 0.3), 0.0, 1.0))
+
+            # Market consensus strength
+            def consensus_strength(vals: list[float | None]) -> float | float:
+                arr = np.array([v for v in vals if v is not None and not np.isnan(v)], dtype=float)
+                if arr.size == 0:
+                    return np.nan
+                mu = arr.mean()
+                if mu == 0:
+                    return np.nan
+                return float(np.clip(1.0 - (arr.std(ddof=0) / mu), 0.0, 1.0))
+
+            # Odds movement: closing Avg minus opening Avg
+            home_move = (
+                (home_sel["close"] - home_sel["open"])
+                if not np.isnan(home_sel["close"]) and not np.isnan(home_sel["open"])
+                else np.nan
+            )
+            away_move = (
+                (away_sel["close"] - away_sel["open"])
+                if not np.isnan(away_sel["close"]) and not np.isnan(away_sel["open"])
+                else np.nan
+            )
+
+            # Favorite status by lower win odds
+            favorite_home = (
+                1.0
+                if (
+                    home_sel["odds"] is not None
+                    and away_sel["odds"] is not None
+                    and home_sel["odds"] < away_sel["odds"]
+                )
+                else 0.0
+            )
+            favorite_away = (
+                1.0
+                if (
+                    home_sel["odds"] is not None
+                    and away_sel["odds"] is not None
+                    and away_sel["odds"] < home_sel["odds"]
+                )
+                else 0.0
+            )
+
+            # Asian handicap line and team odds
+            ah_line = row.get("AHh") if pd.notna(row.get("AHh")) else 0.0
+            home_handicap_odds = row.get("AvgAHH")
+            away_handicap_odds = row.get("AvgAHA")
+            if pd.isna(home_handicap_odds) or pd.isna(away_handicap_odds):
+                home_handicap_odds = row.get("B365AHH")
+                away_handicap_odds = row.get("B365AHA")
+
+            # Referee encoding
+            ref = row.get("referee")
+            referee_encoded = (
+                -1 if pd.isna(ref) or ref is None or str(ref).strip() == "" else abs(hash(str(ref))) % 10_000
+            )
+
+            # Common meta
+            as_of_utc = pd.to_datetime(row.get("as_of_utc", self.calculation_date))
+
+            # Build per-team fixture feature dicts
+            # HOME perspective
+            home_features = {
+                "fixture_id": int(row["fixture_id"]),
+                "gameweek": int(row.get("gameweek", 1) or 1),
+                "is_home": True,
+                "team_win_probability": float(p_home_n) if not np.isnan(p_home_n) else np.nan,
+                "opponent_win_probability": float(p_away_n) if not np.isnan(p_away_n) else np.nan,
+                "draw_probability": float(p_draw_n) if not np.isnan(p_draw_n) else np.nan,
+                "implied_clean_sheet_probability": cs_prob(
+                    implied_total_goals,
+                    (home_xg / implied_total_goals)
+                    if not np.isnan(home_xg) and not np.isnan(implied_total_goals) and implied_total_goals > 0
+                    else np.nan,
+                ),
+                "implied_total_goals": float(implied_total_goals) if not np.isnan(implied_total_goals) else np.nan,
+                "team_expected_goals": float(home_xg) if not np.isnan(home_xg) else np.nan,
+                "market_consensus_strength": consensus_strength(
+                    [row.get("B365H"), row.get("PSH"), row.get("MaxH"), row.get("AvgH")]
+                ),
+                "odds_movement_team": float(home_move) if not np.isnan(home_move) else np.nan,
+                "odds_movement_magnitude": float(abs(home_move)) if not np.isnan(home_move) else np.nan,
+                "favorite_status": float(favorite_home),
+                "asian_handicap_line": float(ah_line),
+                "handicap_team_odds": float(home_handicap_odds) if pd.notna(home_handicap_odds) else np.nan,
+                "expected_goal_difference": float(ah_line * HANDICAP_STRENGTH_FACTOR),
+                "over_under_signal": float(implied_total_goals - 2.5) if not np.isnan(implied_total_goals) else np.nan,
+                "referee_encoded": int(referee_encoded),
+                "as_of_utc": as_of_utc,
+            }
+
+            # AWAY perspective (invert where needed)
+            away_features = {
+                "fixture_id": int(row["fixture_id"]),
+                "gameweek": int(row.get("gameweek", 1) or 1),
+                "is_home": False,
+                "team_win_probability": float(p_away_n) if not np.isnan(p_away_n) else np.nan,
+                "opponent_win_probability": float(p_home_n) if not np.isnan(p_home_n) else np.nan,
+                "draw_probability": float(p_draw_n) if not np.isnan(p_draw_n) else np.nan,
+                "implied_clean_sheet_probability": cs_prob(
+                    implied_total_goals,
+                    (away_xg / implied_total_goals)
+                    if not np.isnan(away_xg) and not np.isnan(implied_total_goals) and implied_total_goals > 0
+                    else np.nan,
+                ),
+                "implied_total_goals": float(implied_total_goals) if not np.isnan(implied_total_goals) else np.nan,
+                "team_expected_goals": float(away_xg) if not np.isnan(away_xg) else np.nan,
+                "market_consensus_strength": consensus_strength(
+                    [row.get("B365A"), row.get("PSA"), row.get("MaxA"), row.get("AvgA")]
+                ),
+                "odds_movement_team": float(away_move) if not np.isnan(away_move) else np.nan,
+                "odds_movement_magnitude": float(abs(away_move)) if not np.isnan(away_move) else np.nan,
+                "favorite_status": float(favorite_away),
+                "asian_handicap_line": float(-ah_line),
+                "handicap_team_odds": float(away_handicap_odds) if pd.notna(away_handicap_odds) else np.nan,
+                "expected_goal_difference": float(-ah_line * HANDICAP_STRENGTH_FACTOR),
+                "over_under_signal": float(implied_total_goals - 2.5) if not np.isnan(implied_total_goals) else np.nan,
+                "referee_encoded": int(referee_encoded),
+                "as_of_utc": as_of_utc,
+            }
+
+            # Expand to player level by joining team membership
+            # Note: row["home_team_id"] and row["away_team_id"] may be pandas NA (nullable Int64)
+            # Avoid calling int() on pd.NA which raises TypeError; skip if team_id is missing
+            home_team_id_val = row["home_team_id"]
+            away_team_id_val = row["away_team_id"]
+            pairs = []
+            if pd.notna(home_team_id_val):
+                pairs.append((True, int(home_team_id_val), home_features))
+            if pd.notna(away_team_id_val):
+                pairs.append((False, int(away_team_id_val), away_features))
+
+            for is_home, team_id, feat in pairs:
+                team_players = players[players["team"] == team_id][["id"]].rename(columns={"id": "player_id"})
+                if team_players.empty:
+                    # Produce a single neutral default row tied to team by using opponent GK placeholder? Skip instead.
+                    continue
+
+                # Apply defaults where NaN
+                feat_filled = {
+                    k: (v if (v is not None and not (isinstance(v, float) and np.isnan(v))) else DEFAULTS[k])
+                    for k, v in feat.items()
+                    if k in DEFAULTS
+                }
+                # Preserve non-default keys
+                for k in set(feat.keys()) - set(DEFAULTS.keys()):
+                    feat_filled[k] = feat[k]
+
+                feat_df = team_players.copy()
+                for k, v in feat_filled.items():
+                    feat_df[k] = v
+
+                # Add perspective flag
+                feat_df["is_home"] = is_home
+                records.append(feat_df)
+
+        if not records:
+            logger.warning("No betting features generated")
+            return self._create_empty_betting_features()
+
+        result = pd.concat(records, ignore_index=True, sort=False)
+
+        # Ensure data types and required columns
+        expected_cols = [
+            "gameweek",
+            "fixture_id",
+            "player_id",
+            "is_home",
+            "team_win_probability",
+            "opponent_win_probability",
+            "draw_probability",
+            "implied_clean_sheet_probability",
+            "implied_total_goals",
+            "team_expected_goals",
+            "market_consensus_strength",
+            "odds_movement_team",
+            "odds_movement_magnitude",
+            "favorite_status",
+            "asian_handicap_line",
+            "handicap_team_odds",
+            "expected_goal_difference",
+            "over_under_signal",
+            "referee_encoded",
+            "as_of_utc",
+        ]
+        # Some columns came from feat_filled already; make sure to include missing with defaults
+        for col in expected_cols:
+            if col not in result.columns:
+                default_val = DEFAULTS.get(col, np.nan)
+                result[col] = default_val
+
+        # Validate
+        try:
+            validated = DerivedBettingFeaturesSchema.validate(result[expected_cols])
+            logger.info(
+                f"Processed betting features for {validated['fixture_id'].nunique()} fixtures, {len(validated)} player-rows"
+            )
+            return validated
+        except Exception as e:
+            logger.error(f"Betting features schema validation failed: {e}")
+            return self._create_empty_betting_features()
 
     def _load_raw_data(self) -> dict[str, pd.DataFrame]:
         """Load all necessary raw data from database."""
@@ -919,6 +1334,7 @@ class DerivedDataProcessor:
             "derived_fixture_difficulty": self._create_empty_fixture_difficulty(),
             "derived_value_analysis": self._create_empty_value_analysis(),
             "derived_ownership_trends": self._create_empty_ownership_trends(),
+            "derived_betting_features": self._create_empty_betting_features(),
         }
 
     def _create_empty_player_metrics(self) -> pd.DataFrame:
@@ -1060,6 +1476,33 @@ class DerivedDataProcessor:
                 "bandwagon_score",
                 "gameweek",
                 "last_updated",
+            ]
+        )
+
+    def _create_empty_betting_features(self) -> pd.DataFrame:
+        """Create empty betting features DataFrame with correct schema."""
+        return pd.DataFrame(
+            columns=[
+                "gameweek",
+                "fixture_id",
+                "player_id",
+                "is_home",
+                "team_win_probability",
+                "opponent_win_probability",
+                "draw_probability",
+                "implied_clean_sheet_probability",
+                "implied_total_goals",
+                "team_expected_goals",
+                "market_consensus_strength",
+                "odds_movement_team",
+                "odds_movement_magnitude",
+                "favorite_status",
+                "asian_handicap_line",
+                "handicap_team_odds",
+                "expected_goal_difference",
+                "over_under_signal",
+                "referee_encoded",
+                "as_of_utc",
             ]
         )
 
