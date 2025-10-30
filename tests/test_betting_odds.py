@@ -10,12 +10,14 @@ Tests cover:
 - Feature engineering capabilities
 """
 
+import math
 import pandas as pd
 import pytest
 
 from client.fpl_data_client import FPLDataClient
 from fetchers.external import fetch_betting_odds_data
 from fetchers.raw_processor import process_raw_betting_odds
+from fetchers.derived_processor import devig_two_way_probability, lambda_from_over25_prob
 from validation.raw_schemas import RawBettingOddsSchema
 
 
@@ -550,21 +552,46 @@ class TestBettingOddsFeatureEngineering:
                 assert odds_with_b365["home_win_prob_adj"].between(0, 1).all(), "Normalized probability should be 0-1"
 
     def test_expected_goals_from_over_under(self):
-        """Test that expected goals can be calculated from over/under markets."""
+        """Test that expected goals are derived via de-vig + Poisson inversion."""
         odds = self.client.get_raw_betting_odds()
 
-        if not odds.empty and "B365_over_2_5" in odds.columns:
-            odds_with_ou = odds[odds["B365_over_2_5"].notna()].copy()
-
-            if not odds_with_ou.empty:
-                odds_with_ou["implied_total_goals"] = 2.5 * (
-                    odds_with_ou["B365_over_2_5"] / (odds_with_ou["B365_over_2_5"] + odds_with_ou["B365_under_2_5"])
+        if not odds.empty and "B365_over_2_5" in odds.columns and "B365_under_2_5" in odds.columns:
+            sample = odds.dropna(subset=["B365_over_2_5", "B365_under_2_5"]).head(20).copy()
+            if not sample.empty:
+                p_over = sample.apply(
+                    lambda r: devig_two_way_probability(r["B365_over_2_5"], r["B365_under_2_5"]), axis=1
                 )
+                lambdas = p_over.apply(lambda p: lambda_from_over25_prob(p) if not math.isnan(p) else float("nan"))
 
-                # Expected goals should be positive and reasonable (0-10)
-                assert odds_with_ou["implied_total_goals"].between(0, 10).all(), (
-                    "Expected goals should be reasonable (0-10)"
-                )
+                # λ should be positive and within a reasonable range
+                assert lambdas.dropna().between(0, 10).all()
+
+                # Check inversion consistency for a few rows
+                def p_over_from_lambda(lmb: float) -> float:
+                    return 1.0 - math.exp(-lmb) * (1.0 + lmb + (lmb * lmb) / 2.0)
+
+                for p, lmb in zip(p_over.dropna().tolist()[:5], lambdas.dropna().tolist()[:5]):
+                    assert abs(p_over_from_lambda(lmb) - p) < 1e-4
+
+    def test_devig_two_way_probability(self):
+        """De-vigging uses proportional normalization of implied probabilities."""
+        # Balanced market: both 2.0 => 50%
+        assert abs(devig_two_way_probability(2.0, 2.0) - 0.5) < 1e-9
+
+        # Skewed market example
+        p = devig_two_way_probability(1.80, 2.00)
+        # Raw implied: over=0.555..., under=0.5 => normalized over ≈ 0.526315789
+        assert abs(p - (1/1.80) / ((1/1.80) + (1/2.00))) < 1e-12
+
+    def test_lambda_from_over25_prob_inversion(self):
+        """Binary search inversion should match the Poisson tail within tolerance."""
+        def p_over_from_lambda(lmb: float) -> float:
+            return 1.0 - math.exp(-lmb) * (1.0 + lmb + (lmb * lmb) / 2.0)
+
+        for p in [0.2, 0.5, 0.8]:
+            lmb = lambda_from_over25_prob(p)
+            assert 0.0 <= lmb <= 8.0
+            assert abs(p_over_from_lambda(lmb) - p) < 1e-6
 
     def test_odds_movement_calculation(self):
         """Test that odds movement can be calculated when closing odds available."""

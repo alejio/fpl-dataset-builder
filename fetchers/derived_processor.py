@@ -30,6 +30,43 @@ FORM_GAMES = 5  # Number of games for form calculations
 VALUE_CONFIDENCE_THRESHOLD = 0.7  # Minimum confidence for value recommendations
 
 
+def devig_two_way_probability(odds_a: float | None, odds_b: float | None) -> float:
+    """Return de-vigged probability for outcome A given two-way decimal odds.
+
+    Uses proportional normalization of implied probabilities: p=1/odds.
+    Returns NaN if inputs are missing or non-positive.
+    """
+    if odds_a is None or odds_b is None:
+        return np.nan
+    if odds_a <= 0 or odds_b <= 0:
+        return np.nan
+    p_a_raw = 1.0 / float(odds_a)
+    p_b_raw = 1.0 / float(odds_b)
+    total = p_a_raw + p_b_raw
+    if total <= 0:
+        return np.nan
+    return float(p_a_raw / total)
+
+
+def lambda_from_over25_prob(p_over: float, max_lambda: float = 8.0) -> float:
+    """Solve for total-goals Poisson λ from P(N >= 3) = p_over.
+
+    Uses binary search on λ with the identity: P(N >= 3) = 1 - e^{-λ}(1 + λ + λ^2/2).
+    """
+    if np.isnan(p_over):
+        return np.nan
+    target = float(np.clip(p_over, 1e-6, 1 - 1e-6))
+    lo, hi = 0.0, max_lambda
+    for _ in range(40):
+        mid = (lo + hi) / 2.0
+        p_mid = 1.0 - np.exp(-mid) * (1.0 + mid + (mid * mid) / 2.0)
+        if p_mid < target:
+            lo = mid
+        else:
+            hi = mid
+    return (lo + hi) / 2.0
+
+
 class DerivedDataProcessor:
     """Processes raw FPL data into derived analytics metrics."""
 
@@ -219,6 +256,8 @@ class DerivedDataProcessor:
 
         HANDICAP_STRENGTH_FACTOR = 1.0
 
+        # Helper functions defined at module scope for testability
+
         for _, row in df.iterrows():
             # Select odds for home/away
             home_sel = select_team_odds(row, "H")
@@ -242,12 +281,10 @@ class DerivedDataProcessor:
             else:
                 p_home_n = p_draw_n = p_away_n = np.nan
 
-            # Implied total goals from over/under
+            # Implied total goals from over/under via de-vigged probability and Poisson inversion
             over_25, under_25 = select_over_under(row)
-            if over_25 is not None and under_25 is not None and (over_25 + under_25) > 0:
-                implied_total_goals = 2.5 * (over_25 / (over_25 + under_25))
-            else:
-                implied_total_goals = np.nan
+            p_over_25 = devig_two_way_probability(over_25, under_25)
+            implied_total_goals = lambda_from_over25_prob(p_over_25) if not np.isnan(p_over_25) else np.nan
 
             # Split expected goals between teams: share = win + 0.5*draw; normalize shares
             if (
