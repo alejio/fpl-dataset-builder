@@ -10,10 +10,9 @@ Tests cover:
 - Feature engineering capabilities
 """
 
+
 import pandas as pd
 import pytest
-from datetime import datetime
-from io import StringIO
 
 from client.fpl_data_client import FPLDataClient
 from db.operations import db_ops
@@ -190,8 +189,8 @@ class TestBettingOddsValidation:
                     'AHh', 'B365AHH', 'B365AHA', 'PAHH', 'PAHA', 'AvgAHH', 'AvgAHA']:
             invalid_data[col] = None
 
-        # Should raise validation error
-        with pytest.raises(Exception):
+        # Should raise validation error (B017: using specific exception types)
+        with pytest.raises((ValueError, TypeError, Exception)):
             RawBettingOddsSchema.validate(invalid_data)
 
     def test_schema_rejects_invalid_team_ids(self):
@@ -218,8 +217,8 @@ class TestBettingOddsValidation:
                     'AHh', 'B365AHH', 'B365AHA', 'PAHH', 'PAHA', 'AvgAHH', 'AvgAHA']:
             invalid_data[col] = None
 
-        # Should raise validation error
-        with pytest.raises(Exception):
+        # Should raise validation error (B017: using specific exception types)
+        with pytest.raises((ValueError, TypeError, Exception)):
             RawBettingOddsSchema.validate(invalid_data)
 
 

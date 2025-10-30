@@ -265,6 +265,9 @@ def print_completion_summary(operations: dict) -> None:
         gw = operations.get("current_gameweek")
         typer.echo(f"  ⏭️  Gameweek {gw} data skipped (already exists)")
 
+    if operations.get("betting_odds_updated"):
+        typer.echo("  ✅ Betting odds refreshed from football-data.co.uk")
+
     if operations.get("derived_updated"):
         typer.echo("  ✅ Derived analytics processed and saved")
 

@@ -55,17 +55,17 @@ uv run main.py main --help
 
 **Common workflows:**
 ```bash
-# 1. After gameweek finishes (capture results)
+# 1. After gameweek finishes (capture results) - RECOMMENDED WEEKLY RUN
 uv run main.py main
-# Auto-captures: GW performance + snapshot for NEXT GW
+# Auto-captures: GW performance + snapshot for NEXT GW + betting odds
 
 # 2. Before next gameweek starts (refresh everything)
 uv run main.py main --force-refresh-gameweek
-# Auto-captures: Fresh GW data + snapshot for NEXT GW
+# Auto-captures: Fresh GW data + snapshot for NEXT GW + betting odds
 
 # 3. Quick price check before deadline
 uv run main.py refresh-bootstrap
-# Auto-captures: Prices/form + snapshot for current/next GW
+# Auto-captures: Prices/form + snapshot for current/next GW (no odds refresh)
 ```
 
 **✨ NEW: Automatic Snapshot Capture**
@@ -88,13 +88,18 @@ uv run main.py snapshot --gameweek 8 --force
 ```
 
 ### Betting odds commands
+
+**✨ NEW: Betting odds are now AUTOMATIC!**
+- The `main` command automatically fetches betting odds from football-data.co.uk
+- No need to run a separate command for weekly updates
+
+**Manual fetch (optional):**
 ```bash
-# Fetch Premier League betting odds from football-data.co.uk
+# Only needed for specific scenarios (historical seasons, force refresh, etc.)
 uv run main.py fetch-betting-odds                  # Fetch current season (2025-26)
 uv run main.py fetch-betting-odds --season 2024-25 # Fetch specific season
 uv run main.py fetch-betting-odds --force          # Force refresh existing data
 
-# NOTE: Requires FPL data to exist first (run 'uv run main.py main' first)
 # Fetches ~380 fixtures with pre-match odds, closing odds, over/under, Asian handicap
 ```
 

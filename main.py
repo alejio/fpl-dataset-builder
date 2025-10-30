@@ -15,6 +15,7 @@ from cli.helpers import (
     process_and_save_derived_data,
     run_preflight_checks,
 )
+from db.operations import db_ops
 from fetchers import get_current_gameweek
 from safety.cli import create_safety_cli
 
@@ -42,6 +43,7 @@ def main(
     - Bootstrap data (players, teams, prices, form) - ALWAYS refreshed
     - Availability snapshot - AUTOMATICALLY captured for current/next GW
     - Current gameweek data - Only if missing (use --force-refresh-gameweek to update)
+    - Betting odds - AUTOMATICALLY fetched from football-data.co.uk
     - Derived analytics - ALWAYS reprocessed from fresh raw data
 
     The snapshot is automatically captured based on gameweek state:
@@ -96,13 +98,47 @@ def main(
             gameweek_skipped = True
     typer.echo()
 
-    # 6. Process derived analytics (ALWAYS reprocessed from fresh raw data)
+    # 6. Fetch and save betting odds (runs after fixtures are available)
+    typer.echo("🎲 Fetching betting odds...")
+    betting_odds_updated = False
+    try:
+        from fetchers.external import fetch_betting_odds_data
+        from fetchers.raw_processor import process_raw_betting_odds
+
+        # Check if odds already exist
+        try:
+            existing_odds = db_ops.get_raw_betting_odds()
+            if not existing_odds.empty:
+                typer.echo(f"   ℹ️  Betting odds already exist ({len(existing_odds)} fixtures) - refreshing...")
+        except Exception:
+            pass
+
+        # Fetch and process odds
+        raw_odds_df = fetch_betting_odds_data(season="2025-26")
+        if not raw_odds_df.empty:
+            fixtures_df = db_ops.get_raw_fixtures()
+            teams_df = db_ops.get_raw_teams_bootstrap()
+            processed_odds = process_raw_betting_odds(raw_odds_df, fixtures_df, teams_df)
+
+            if not processed_odds.empty:
+                db_ops.save_raw_betting_odds(processed_odds)
+                betting_odds_updated = True
+                typer.echo(f"   ✅ Betting odds updated ({len(processed_odds)} fixtures)")
+            else:
+                typer.echo("   ⚠️  No betting odds could be matched to fixtures")
+        else:
+            typer.echo("   ⚠️  Failed to fetch betting odds data")
+    except Exception as e:
+        typer.echo(f"   ⚠️  Error fetching betting odds: {str(e)[:100]}")
+    typer.echo()
+
+    # 7. Process derived analytics (ALWAYS reprocessed from fresh raw data)
     if skip_derived:
         typer.echo("⏭️  Skipping derived analytics processing (--skip-derived enabled)")
     else:
         process_and_save_derived_data()
 
-    # 7. Print completion summary
+    # 8. Print completion summary
     print_completion_summary(
         {
             "bootstrap_updated": True,
@@ -110,6 +146,7 @@ def main(
             "snapshot_gameweek": snapshot_gameweek,
             "gameweek_updated": gameweek_updated,
             "gameweek_skipped": gameweek_skipped,
+            "betting_odds_updated": betting_odds_updated,
             "derived_updated": not skip_derived,
             "current_gameweek": current_gameweek,
             "is_finished": is_finished,
