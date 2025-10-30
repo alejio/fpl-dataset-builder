@@ -431,10 +431,17 @@ class DerivedDataProcessor:
             }
 
             # Expand to player level by joining team membership
-            for is_home, team_id, feat in (
-                (True, int(row["home_team_id"]), home_features),
-                (False, int(row["away_team_id"]), away_features),
-            ):
+            # Note: row["home_team_id"] and row["away_team_id"] may be pandas NA (nullable Int64)
+            # Avoid calling int() on pd.NA which raises TypeError; skip if team_id is missing
+            home_team_id_val = row["home_team_id"]
+            away_team_id_val = row["away_team_id"]
+            pairs = []
+            if pd.notna(home_team_id_val):
+                pairs.append((True, int(home_team_id_val), home_features))
+            if pd.notna(away_team_id_val):
+                pairs.append((False, int(away_team_id_val), away_features))
+
+            for is_home, team_id, feat in pairs:
                 team_players = players[players["team"] == team_id][["id"]].rename(columns={"id": "player_id"})
                 if team_players.empty:
                     # Produce a single neutral default row tied to team by using opponent GK placeholder? Skip instead.
