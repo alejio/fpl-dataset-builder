@@ -899,16 +899,18 @@ class DatabaseOperations:
         before inserting new data, preserving historical gameweeks.
         """
         with next(get_session()) as session:
-            if not df.empty and "gameweek" in df.columns:
-                gameweek = int(df["gameweek"].iloc[0])
-                deleted_count = (
-                    session.query(models_derived.DerivedBettingFeatures)
-                    .filter(models_derived.DerivedBettingFeatures.gameweek == gameweek)
-                    .delete()
-                )
-                session.flush()
-                if deleted_count > 0:
-                    print(f"  🗑️ Deleted {deleted_count} existing betting features for GW{gameweek}")
+            if not df.empty:
+                # Prefer precise deletion by incoming fixture_ids to avoid unique conflicts
+                fixture_ids = df["fixture_id"].dropna().unique().tolist()
+                if fixture_ids:
+                    deleted_count = (
+                        session.query(models_derived.DerivedBettingFeatures)
+                        .filter(models_derived.DerivedBettingFeatures.fixture_id.in_(fixture_ids))
+                        .delete(synchronize_session=False)
+                    )
+                    session.flush()
+                    if deleted_count > 0:
+                        print(f"  🗑️ Deleted {deleted_count} existing betting features for {len(fixture_ids)} fixtures")
 
             df_converted = convert_datetime_columns(df, ["as_of_utc"])
             records = df_converted.to_dict("records")

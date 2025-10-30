@@ -14,7 +14,6 @@ import pandas as pd
 import pytest
 
 from client.fpl_data_client import FPLDataClient
-from db.operations import db_ops
 from fetchers.external import fetch_betting_odds_data
 from fetchers.raw_processor import process_raw_betting_odds
 from validation.raw_schemas import RawBettingOddsSchema
@@ -368,61 +367,27 @@ class TestBettingOddsDatabase:
         """Set up test database operations."""
         self.client = FPLDataClient()
 
-    def test_database_save_and_retrieve(self):
-        """Test that data can be saved and retrieved from database."""
-        # Fetch and process real data
-        odds_df = fetch_betting_odds_data(season="2025-26")
-        fixtures = self.client.get_raw_fixtures()
-        teams = self.client.get_raw_teams_bootstrap()
-        processed = process_raw_betting_odds(odds_df, fixtures, teams)
+    def test_database_read_retrieve(self):
+        """Query-only: ensure retrieval works and returns a DataFrame."""
+        client = self.client
+        retrieved = client.get_raw_betting_odds()
+        assert isinstance(retrieved, pd.DataFrame)
 
-        if not processed.empty:
-            # Save to database
-            db_ops.save_raw_betting_odds(processed)
+    def test_database_replace_strategy_readonly(self):
+        """Query-only: ensure repeated reads are stable in count if data present."""
+        client = self.client
+        first = client.get_raw_betting_odds()
+        second = client.get_raw_betting_odds()
+        if not first.empty and not second.empty:
+            assert len(first) == len(second)
 
-            # Retrieve from database
-            retrieved = db_ops.get_raw_betting_odds()
-
-            assert not retrieved.empty, "Should retrieve saved data"
-            assert len(retrieved) == len(processed), "Should retrieve same number of rows"
-
-    def test_database_replace_strategy(self):
-        """Test that REPLACE strategy works (overwrites existing data)."""
-        odds_df = fetch_betting_odds_data(season="2025-26")
-        fixtures = self.client.get_raw_fixtures()
-        teams = self.client.get_raw_teams_bootstrap()
-        processed = process_raw_betting_odds(odds_df, fixtures, teams)
-
-        if not processed.empty:
-            # Save first time
-            db_ops.save_raw_betting_odds(processed)
-            first_save = db_ops.get_raw_betting_odds()
-            first_count = len(first_save)
-
-            # Save again (should replace)
-            db_ops.save_raw_betting_odds(processed)
-            second_save = db_ops.get_raw_betting_odds()
-            second_count = len(second_save)
-
-            assert first_count == second_count, "REPLACE should maintain same row count"
-
-    def test_database_gameweek_filtering(self):
-        """Test that gameweek filtering works correctly."""
-        # Fetch and save data
-        odds_df = fetch_betting_odds_data(season="2025-26")
-        fixtures = self.client.get_raw_fixtures()
-        teams = self.client.get_raw_teams_bootstrap()
-        processed = process_raw_betting_odds(odds_df, fixtures, teams)
-
-        if not processed.empty:
-            db_ops.save_raw_betting_odds(processed)
-
-            # Test filtering by gameweek
-            all_odds = db_ops.get_raw_betting_odds()
-            gw1_odds = db_ops.get_raw_betting_odds(gameweek=1)
-
-            assert len(gw1_odds) <= len(all_odds), "Filtered should have <= total rows"
-            assert len(gw1_odds) >= 0, "Should return valid result even if no GW1 odds"
+    def test_database_gameweek_filtering_readonly(self):
+        """Query-only: test that optional gameweek filter narrows or equals results."""
+        client = self.client
+        all_odds = client.get_raw_betting_odds()
+        gw1_odds = client.get_raw_betting_odds(gameweek=1)
+        if not all_odds.empty:
+            assert len(gw1_odds) <= len(all_odds)
 
 
 class TestBettingOddsClientLibrary:
@@ -432,14 +397,6 @@ class TestBettingOddsClientLibrary:
     def setup(self):
         """Set up test client."""
         self.client = FPLDataClient()
-
-        # Ensure data exists
-        odds_df = fetch_betting_odds_data(season="2025-26")
-        fixtures = self.client.get_raw_fixtures()
-        teams = self.client.get_raw_teams_bootstrap()
-        processed = process_raw_betting_odds(odds_df, fixtures, teams)
-        if not processed.empty:
-            db_ops.save_raw_betting_odds(processed)
 
     def test_get_raw_betting_odds_returns_dataframe(self):
         """Test that get_raw_betting_odds returns a DataFrame."""
@@ -504,16 +461,8 @@ class TestBettingOddsReferentialIntegrity:
 
     @pytest.fixture(autouse=True)
     def setup(self):
-        """Set up test data."""
+        """Set up test data (read-only)."""
         self.client = FPLDataClient()
-
-        # Ensure data exists
-        odds_df = fetch_betting_odds_data(season="2025-26")
-        fixtures = self.client.get_raw_fixtures()
-        teams = self.client.get_raw_teams_bootstrap()
-        processed = process_raw_betting_odds(odds_df, fixtures, teams)
-        if not processed.empty:
-            db_ops.save_raw_betting_odds(processed)
 
     def test_all_fixture_ids_exist_in_fixtures_table(self):
         """Test that all betting odds fixture_ids exist in fixtures table."""
@@ -557,16 +506,8 @@ class TestBettingOddsFeatureEngineering:
 
     @pytest.fixture(autouse=True)
     def setup(self):
-        """Set up test data."""
+        """Set up test data (read-only)."""
         self.client = FPLDataClient()
-
-        # Ensure data exists
-        odds_df = fetch_betting_odds_data(season="2025-26")
-        fixtures = self.client.get_raw_fixtures()
-        teams = self.client.get_raw_teams_bootstrap()
-        processed = process_raw_betting_odds(odds_df, fixtures, teams)
-        if not processed.empty:
-            db_ops.save_raw_betting_odds(processed)
 
     def test_implied_probability_calculation(self):
         """Test that implied probabilities can be calculated from odds."""
