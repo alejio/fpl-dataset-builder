@@ -234,6 +234,17 @@ class FPLDataClient:
         except Exception as e:
             raise RuntimeError(f"Failed to fetch derived ownership trends: {e}") from e
 
+    def get_derived_betting_features(self, gameweek: int | None = None) -> pd.DataFrame:
+        """Get betting-odds-derived features at player level.
+
+        Args:
+            gameweek: Optional gameweek filter
+        """
+        try:
+            return db_ops.get_derived_betting_features(gameweek=gameweek)
+        except Exception as e:
+            raise RuntimeError(f"Failed to fetch derived betting features: {e}") from e
+
     # Personal Manager Data Access
     def get_my_manager_data(self) -> pd.DataFrame:
         """Get my manager data (single row).
@@ -884,6 +895,11 @@ def get_derived_value_analysis() -> pd.DataFrame:
 def get_derived_ownership_trends() -> pd.DataFrame:
     """Get transfer momentum and ownership trend analysis."""
     return _get_client().get_derived_ownership_trends()
+
+
+def get_derived_betting_features(gameweek: int | None = None) -> pd.DataFrame:
+    """Get betting-odds-derived features at player level."""
+    return _get_client().get_derived_betting_features(gameweek=gameweek)
 
 
 def get_database_summary() -> dict[str, int]:
