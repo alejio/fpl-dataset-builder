@@ -592,3 +592,102 @@ class RawPlayerGameweekSnapshot(Base):
     # Metadata - when snapshot was captured
     snapshot_date: Mapped[datetime] = mapped_column(DateTime, index=True)
     as_of_utc: Mapped[datetime] = mapped_column(DateTime, index=True)
+
+
+class RawBettingOdds(Base):
+    """Premier League betting odds data from football-data.co.uk.
+
+    Contains pre-match and closing odds from major bookmakers, plus match statistics.
+    Uses REPLACE strategy since odds are mutable until match kickoff.
+
+    Foreign key to raw_fixtures ensures referential integrity.
+    """
+
+    __tablename__ = "raw_betting_odds"
+
+    # Primary key - links to FPL fixtures
+    fixture_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+
+    # Match identification (for validation and filtering)
+    match_date: Mapped[datetime] = mapped_column(DateTime, index=True)
+    home_team_id: Mapped[int] = mapped_column(Integer, index=True)
+    away_team_id: Mapped[int] = mapped_column(Integer, index=True)
+
+    # Match context
+    referee: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
+    # Match statistics (11 fields)
+    HS: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Home shots
+    AS: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Away shots
+    HST: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Home shots on target
+    AST: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Away shots on target
+    HC: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Home corners
+    AC: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Away corners
+    HF: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Home fouls
+    AF: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Away fouls
+    HY: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Home yellow cards
+    AY: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Away yellow cards
+    HR: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Home red cards
+    AR: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Away red cards
+
+    # Pre-match odds - Bet365 (3 fields)
+    B365H: Mapped[float | None] = mapped_column(Float, nullable=True)  # Home win
+    B365D: Mapped[float | None] = mapped_column(Float, nullable=True)  # Draw
+    B365A: Mapped[float | None] = mapped_column(Float, nullable=True)  # Away win
+
+    # Pre-match odds - Pinnacle (3 fields)
+    PSH: Mapped[float | None] = mapped_column(Float, nullable=True)
+    PSD: Mapped[float | None] = mapped_column(Float, nullable=True)
+    PSA: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Pre-match odds - Market aggregates (6 fields)
+    MaxH: Mapped[float | None] = mapped_column(Float, nullable=True)  # Max home odds
+    MaxD: Mapped[float | None] = mapped_column(Float, nullable=True)  # Max draw odds
+    MaxA: Mapped[float | None] = mapped_column(Float, nullable=True)  # Max away odds
+    AvgH: Mapped[float | None] = mapped_column(Float, nullable=True)  # Avg home odds
+    AvgD: Mapped[float | None] = mapped_column(Float, nullable=True)  # Avg draw odds
+    AvgA: Mapped[float | None] = mapped_column(Float, nullable=True)  # Avg away odds
+
+    # Closing odds - Bet365 (3 fields)
+    B365CH: Mapped[float | None] = mapped_column(Float, nullable=True)  # Closing home
+    B365CD: Mapped[float | None] = mapped_column(Float, nullable=True)  # Closing draw
+    B365CA: Mapped[float | None] = mapped_column(Float, nullable=True)  # Closing away
+
+    # Closing odds - Pinnacle (3 fields)
+    PSCH: Mapped[float | None] = mapped_column(Float, nullable=True)
+    PSCD: Mapped[float | None] = mapped_column(Float, nullable=True)
+    PSCA: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Closing odds - Market aggregates (6 fields)
+    MaxCH: Mapped[float | None] = mapped_column(Float, nullable=True)
+    MaxCD: Mapped[float | None] = mapped_column(Float, nullable=True)
+    MaxCA: Mapped[float | None] = mapped_column(Float, nullable=True)
+    AvgCH: Mapped[float | None] = mapped_column(Float, nullable=True)
+    AvgCD: Mapped[float | None] = mapped_column(Float, nullable=True)
+    AvgCA: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Over/Under 2.5 goals - Bet365 (2 fields)
+    B365_over_2_5: Mapped[float | None] = mapped_column(Float, nullable=True)
+    B365_under_2_5: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Over/Under 2.5 goals - Betfair Exchange (2 fields)
+    BFE_over_2_5: Mapped[float | None] = mapped_column(Float, nullable=True)
+    BFE_under_2_5: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Over/Under 2.5 goals - Market aggregates (4 fields)
+    Max_over_2_5: Mapped[float | None] = mapped_column(Float, nullable=True)
+    Max_under_2_5: Mapped[float | None] = mapped_column(Float, nullable=True)
+    Avg_over_2_5: Mapped[float | None] = mapped_column(Float, nullable=True)
+    Avg_under_2_5: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Asian Handicap (7 fields)
+    AHh: Mapped[float | None] = mapped_column(Float, nullable=True)  # Handicap value
+    B365AHH: Mapped[float | None] = mapped_column(Float, nullable=True)  # Bet365 home with handicap
+    B365AHA: Mapped[float | None] = mapped_column(Float, nullable=True)  # Bet365 away with handicap
+    PAHH: Mapped[float | None] = mapped_column(Float, nullable=True)  # Pinnacle home with handicap
+    PAHA: Mapped[float | None] = mapped_column(Float, nullable=True)  # Pinnacle away with handicap
+    AvgAHH: Mapped[float | None] = mapped_column(Float, nullable=True)  # Avg home with handicap
+    AvgAHA: Mapped[float | None] = mapped_column(Float, nullable=True)  # Avg away with handicap
+
+    # Metadata - our addition
+    as_of_utc: Mapped[datetime] = mapped_column(DateTime, index=True)

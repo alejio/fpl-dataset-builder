@@ -73,3 +73,38 @@ def fetch_player_rates_last_season(season: str) -> pd.DataFrame:
 
     # Return empty DataFrame with correct schema for manual population
     return pd.DataFrame(columns=["player", "team", "season", "minutes", "xG", "xA", "xG90", "xA90", "player_id"])
+
+
+def fetch_betting_odds_data(season: str = "2025-26") -> pd.DataFrame:
+    """Fetch Premier League betting odds from football-data.co.uk.
+
+    Args:
+        season: Season in format "YYYY-YY" (e.g., "2025-26")
+
+    Returns:
+        DataFrame with betting odds data, or empty DataFrame on error
+    """
+    print(f"Fetching betting odds for season {season} from football-data.co.uk...")
+
+    try:
+        # Convert season format: "2025-26" -> "2526"
+        if "-" in season:
+            start_year, end_year = season.split("-")
+            season_code = f"{start_year[-2:]}{end_year}"
+        else:
+            season_code = season
+
+        # Fetch CSV from football-data.co.uk
+        url = f"https://www.football-data.co.uk/mmz4281/{season_code}/E0.csv"
+        data = http_get(url)
+
+        # Read CSV data
+        odds_df = pd.read_csv(StringIO(data.decode("utf-8")))
+
+        print(f"Successfully fetched {len(odds_df)} matches from football-data.co.uk")
+        return odds_df
+
+    except Exception as e:
+        print(f"Error fetching betting odds from football-data.co.uk: {e}")
+        # Return empty DataFrame with minimal schema (processing will handle full schema)
+        return pd.DataFrame()

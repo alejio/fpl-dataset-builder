@@ -713,3 +713,183 @@ def process_player_gameweek_snapshot(
         print(f"❌ Snapshot validation failed: {str(e)[:200]}")
         print("Returning unvalidated DataFrame")
         return df
+
+
+def process_raw_betting_odds(odds_df: pd.DataFrame, fixtures_df: pd.DataFrame, teams_df: pd.DataFrame) -> pd.DataFrame:
+    """Process betting odds data and map to FPL fixtures.
+
+    Args:
+        odds_df: Raw betting odds DataFrame from football-data.co.uk
+        fixtures_df: FPL fixtures DataFrame (from raw_fixtures)
+        teams_df: FPL teams DataFrame (from raw_teams_bootstrap)
+
+    Returns:
+        Processed DataFrame matching RawBettingOddsSchema, or empty DataFrame on error
+    """
+    from validation.raw_schemas import RawBettingOddsSchema
+
+    print("Processing betting odds data...")
+
+    # Return empty DataFrame if no odds data
+    if odds_df.empty:
+        print("⚠️  No betting odds data to process")
+        return pd.DataFrame()
+
+    # Team name mapping: football-data.co.uk -> FPL
+    TEAM_NAME_MAPPING = {
+        "Man United": "Man Utd",
+        "Tottenham": "Spurs",
+    }
+
+    # Create team name to ID mapping
+    team_name_to_id = dict(zip(teams_df["name"], teams_df["team_id"], strict=False))
+
+    # Convert date format from dd/mm/yyyy to datetime
+    try:
+        odds_df["Date"] = pd.to_datetime(odds_df["Date"], format="%d/%m/%Y")
+    except Exception as e:
+        print(f"⚠️  Error parsing dates: {e}")
+        return pd.DataFrame()
+
+    # Map team names to IDs
+    def map_team_name(name: str) -> int | None:
+        """Map football-data.co.uk team name to FPL team_id."""
+        # Apply name mapping first
+        mapped_name = TEAM_NAME_MAPPING.get(name, name)
+        return team_name_to_id.get(mapped_name)
+
+    odds_df["home_team_id"] = odds_df["HomeTeam"].apply(map_team_name)
+    odds_df["away_team_id"] = odds_df["AwayTeam"].apply(map_team_name)
+
+    # Filter out rows with unmapped teams
+    before_count = len(odds_df)
+    odds_df = odds_df.dropna(subset=["home_team_id", "away_team_id"])
+    unmapped_count = before_count - len(odds_df)
+    if unmapped_count > 0:
+        print(f"⚠️  Dropped {unmapped_count} matches with unmapped teams")
+
+    # Convert team IDs to int
+    odds_df["home_team_id"] = odds_df["home_team_id"].astype(int)
+    odds_df["away_team_id"] = odds_df["away_team_id"].astype(int)
+
+    # Prepare fixtures for matching (extract date from kickoff_utc)
+    fixtures_df = fixtures_df.copy()
+    fixtures_df["match_date"] = pd.to_datetime(fixtures_df["kickoff_utc"]).dt.date
+
+    # Match odds to fixtures on date + teams
+    matched_odds = []
+    unmatched_count = 0
+
+    for _, odds_row in odds_df.iterrows():
+        match_date = odds_row["Date"].date()
+        home_id = odds_row["home_team_id"]
+        away_id = odds_row["away_team_id"]
+
+        # Find matching fixture
+        fixture_match = fixtures_df[
+            (fixtures_df["match_date"] == match_date)
+            & (fixtures_df["home_team_id"] == home_id)
+            & (fixtures_df["away_team_id"] == away_id)
+        ]
+
+        if len(fixture_match) == 1:
+            fixture_id = fixture_match.iloc[0]["fixture_id"]
+
+            # Build processed row with all required fields
+            processed_row = {
+                "fixture_id": fixture_id,
+                "match_date": pd.Timestamp(match_date),
+                "home_team_id": home_id,
+                "away_team_id": away_id,
+                "referee": odds_row.get("Referee"),
+                # Match statistics
+                "HS": odds_row.get("HS"),
+                "AS": odds_row.get("AS"),
+                "HST": odds_row.get("HST"),
+                "AST": odds_row.get("AST"),
+                "HC": odds_row.get("HC"),
+                "AC": odds_row.get("AC"),
+                "HF": odds_row.get("HF"),
+                "AF": odds_row.get("AF"),
+                "HY": odds_row.get("HY"),
+                "AY": odds_row.get("AY"),
+                "HR": odds_row.get("HR"),
+                "AR": odds_row.get("AR"),
+                # Pre-match odds - Bet365
+                "B365H": odds_row.get("B365H"),
+                "B365D": odds_row.get("B365D"),
+                "B365A": odds_row.get("B365A"),
+                # Pre-match odds - Pinnacle
+                "PSH": odds_row.get("PSH"),
+                "PSD": odds_row.get("PSD"),
+                "PSA": odds_row.get("PSA"),
+                # Pre-match odds - Aggregates
+                "MaxH": odds_row.get("MaxH"),
+                "MaxD": odds_row.get("MaxD"),
+                "MaxA": odds_row.get("MaxA"),
+                "AvgH": odds_row.get("AvgH"),
+                "AvgD": odds_row.get("AvgD"),
+                "AvgA": odds_row.get("AvgA"),
+                # Closing odds - Bet365
+                "B365CH": odds_row.get("B365CH"),
+                "B365CD": odds_row.get("B365CD"),
+                "B365CA": odds_row.get("B365CA"),
+                # Closing odds - Pinnacle
+                "PSCH": odds_row.get("PSCH"),
+                "PSCD": odds_row.get("PSCD"),
+                "PSCA": odds_row.get("PSCA"),
+                # Closing odds - Aggregates
+                "MaxCH": odds_row.get("MaxCH"),
+                "MaxCD": odds_row.get("MaxCD"),
+                "MaxCA": odds_row.get("MaxCA"),
+                "AvgCH": odds_row.get("AvgCH"),
+                "AvgCD": odds_row.get("AvgCD"),
+                "AvgCA": odds_row.get("AvgCA"),
+                # Over/Under 2.5 - Bet365
+                "B365_over_2_5": odds_row.get("B365>2.5"),
+                "B365_under_2_5": odds_row.get("B365<2.5"),
+                # Over/Under 2.5 - Betfair Exchange
+                "BFE_over_2_5": odds_row.get("BFE>2.5"),
+                "BFE_under_2_5": odds_row.get("BFE<2.5"),
+                # Over/Under 2.5 - Aggregates
+                "Max_over_2_5": odds_row.get("Max>2.5"),
+                "Max_under_2_5": odds_row.get("Max<2.5"),
+                "Avg_over_2_5": odds_row.get("Avg>2.5"),
+                "Avg_under_2_5": odds_row.get("Avg<2.5"),
+                # Asian Handicap
+                "AHh": odds_row.get("AHh"),
+                "B365AHH": odds_row.get("B365AHH"),
+                "B365AHA": odds_row.get("B365AHA"),
+                "PAHH": odds_row.get("PAHH"),
+                "PAHA": odds_row.get("PAHA"),
+                "AvgAHH": odds_row.get("AvgAHH"),
+                "AvgAHA": odds_row.get("AvgAHA"),
+                # Metadata
+                "as_of_utc": pd.Timestamp.now(tz="UTC"),
+            }
+
+            matched_odds.append(processed_row)
+        else:
+            unmatched_count += 1
+
+    if unmatched_count > 0:
+        print(f"⚠️  {unmatched_count} betting odds rows could not be matched to fixtures")
+
+    if not matched_odds:
+        print("⚠️  No betting odds matched to fixtures")
+        return pd.DataFrame()
+
+    # Convert to DataFrame
+    df = pd.DataFrame(matched_odds)
+
+    print(f"✅ Matched {len(df)} betting odds to fixtures")
+
+    # Validate against schema
+    try:
+        validated_df = RawBettingOddsSchema.validate(df)
+        print(f"✅ Betting odds validation successful - {len(validated_df)} fixtures with odds")
+        return validated_df
+    except Exception as e:
+        print(f"⚠️  Betting odds validation failed: {str(e)[:500]}")
+        print("Returning unvalidated DataFrame")
+        return df

@@ -290,6 +290,83 @@ def refresh_gameweek(
         typer.echo("   Use --force to refresh anyway")
 
 
+@app.command()
+def fetch_betting_odds(
+    season: str = typer.Option("2025-26", help="Season to fetch (e.g., '2025-26')"),
+    force: bool = typer.Option(False, help="Force refresh even if data exists"),
+):
+    """Fetch and save Premier League betting odds from football-data.co.uk.
+
+    This command fetches betting odds data (pre-match, closing odds, over/under, etc.)
+    and maps it to FPL fixtures with referential integrity.
+
+    Example usage:
+        uv run main.py fetch-betting-odds                  # Fetch current season
+        uv run main.py fetch-betting-odds --season 2024-25 # Fetch specific season
+        uv run main.py fetch-betting-odds --force          # Force refresh
+    """
+    from fetchers.external import fetch_betting_odds_data
+    from fetchers.raw_processor import process_raw_betting_odds
+
+    typer.echo("🎲 Fetching Premier League Betting Odds")
+    typer.echo()
+
+    # Initialize data environment
+    initialize_data_environment()
+
+    # Check if odds data already exists
+    from db.operations import db_ops
+
+    try:
+        existing_odds = db_ops.get_raw_betting_odds()
+        if not existing_odds.empty and not force:
+            typer.echo(f"ℹ️  Betting odds data already exists ({len(existing_odds)} fixtures)")
+            typer.echo("   Use --force to refresh anyway")
+            return
+    except Exception:
+        pass  # Table may not exist yet
+
+    # Fetch raw betting odds
+    typer.echo(f"📥 Fetching betting odds for season {season}...")
+    raw_odds_df = fetch_betting_odds_data(season)
+
+    if raw_odds_df.empty:
+        typer.echo("❌ Failed to fetch betting odds data")
+        raise typer.Exit(1)
+
+    # Get fixtures and teams for processing
+    typer.echo("🔄 Processing betting odds data...")
+    fixtures_df = db_ops.get_raw_fixtures()
+    teams_df = db_ops.get_raw_teams_bootstrap()
+
+    if fixtures_df.empty or teams_df.empty:
+        typer.echo("❌ Cannot process betting odds: fixtures or teams data not available")
+        typer.echo("   Run 'uv run main.py main' first to fetch FPL data")
+        raise typer.Exit(1)
+
+    # Process and match to fixtures
+    processed_odds = process_raw_betting_odds(raw_odds_df, fixtures_df, teams_df)
+
+    if processed_odds.empty:
+        typer.echo("❌ No betting odds could be matched to fixtures")
+        raise typer.Exit(1)
+
+    # Save to database
+    typer.echo("💾 Saving betting odds to database...")
+    db_ops.save_raw_betting_odds(processed_odds)
+
+    typer.echo()
+    typer.echo("🎉 Betting odds fetch completed!")
+    typer.echo(f"✅ {len(processed_odds)} fixtures with betting odds saved")
+    typer.echo()
+    typer.echo("📊 Access data via client:")
+    typer.echo("   from client.fpl_data_client import FPLDataClient")
+    typer.echo("   client = FPLDataClient()")
+    typer.echo("   odds = client.get_raw_betting_odds()")
+    typer.echo()
+    typer.echo("💡 Tip: Use 'uv run main.py main --with-betting-odds' to fetch odds automatically")
+
+
 # Create backfill subcommand group
 backfill_app = typer.Typer(help="Backfill historical data for gameweeks and snapshots")
 app.add_typer(backfill_app, name="backfill")

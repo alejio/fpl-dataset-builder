@@ -87,6 +87,16 @@ uv run main.py snapshot --gameweek 8
 uv run main.py snapshot --gameweek 8 --force
 ```
 
+### Betting odds commands
+```bash
+# Fetch Premier League betting odds from football-data.co.uk
+uv run main.py fetch-betting-odds                  # Fetch current season (2025-26)
+uv run main.py fetch-betting-odds --season 2024-25 # Fetch specific season
+uv run main.py fetch-betting-odds --force          # Force refresh existing data
+
+# NOTE: Requires FPL data to exist first (run 'uv run main.py main' first)
+# Fetches ~380 fixtures with pre-match odds, closing odds, over/under, Asian handicap
+```
 
 ### Data safety commands
 ```bash
@@ -286,11 +296,13 @@ Raw+Derived database-only architecture with SQLite database at `data/fpl_data.db
 - **Gameweek Historical Data**: Player performance tracking (2 tables)
   - `raw_player_gameweek_performance` (gameweek-by-gameweek player performance)
   - `raw_player_gameweek_snapshot` (APPEND-ONLY player availability snapshots per gameweek)
+- **Betting Odds Data**: Premier League betting odds (1 table)
+  - `raw_betting_odds` (pre-match/closing odds, over/under, Asian handicap from football-data.co.uk)
 - **Derived Analytics**: Advanced metrics and insights (5 tables)
   - `derived_player_metrics`, `derived_team_form`, `derived_fixture_difficulty`
   - `derived_value_analysis`, `derived_ownership_trends`
 
-**Total: 18 database tables** (11 raw + 2 historical + 5 derived)
+**Total: 19 database tables** (11 raw FPL + 2 historical + 1 betting odds + 5 derived)
 
 **Safety features:**
 - Automatic database backups before any modifications
@@ -332,6 +344,11 @@ value_analysis = client.get_derived_value_analysis()
 # Get personal manager data
 my_manager = client.get_my_manager_data()
 my_picks = client.get_my_current_picks()
+
+# Get betting odds data
+betting_odds = client.get_raw_betting_odds()  # All fixtures
+gw_odds = client.get_raw_betting_odds(gameweek=5)  # GW5 only
+fixtures_with_odds = client.get_fixtures_with_odds()  # Fixtures joined with odds
 ```
 
 ### Raw API Data Access Examples
@@ -598,6 +615,92 @@ All methods are accessed through the `FPLDataClient` class:
 **Player Availability Snapshots (NEW - Historical Injury/Status Tracking):**
 - `get_player_availability_snapshot(gameweek, include_backfilled)` - Player availability state for specific gameweek
 - `get_player_snapshots_history(start_gw, end_gw, player_id, include_backfilled)` - Availability snapshots across multiple gameweeks
+
+**Betting Odds Data (NEW - Premier League Betting Markets):**
+- `get_raw_betting_odds(gameweek)` - Betting odds data from football-data.co.uk (~60 fields per fixture)
+- `get_fixtures_with_odds()` - Convenience method joining fixtures with betting odds
+
+### Betting Odds Data Usage
+
+The betting odds integration provides rich market intelligence for ML predictions:
+
+**Data Source:** football-data.co.uk (weekly updates)
+**Coverage:** ~380 Premier League fixtures per season
+**Fields:** ~60 curated fields including:
+- Pre-match odds (Bet365, Pinnacle, Max, Avg)
+- Closing odds (when betting closes at kickoff)
+- Over/Under 2.5 goals markets
+- Asian Handicap markets
+- Match statistics (shots, corners, fouls, cards)
+- Referee information
+
+**Basic Usage:**
+```python
+from client.fpl_data_client import FPLDataClient
+client = FPLDataClient()
+
+# Get all betting odds
+odds = client.get_raw_betting_odds()
+print(f"Odds for {len(odds)} fixtures")
+
+# Get odds for specific gameweek
+gw5_odds = client.get_raw_betting_odds(gameweek=5)
+
+# Get fixtures with odds joined (left join)
+fixtures_odds = client.get_fixtures_with_odds()
+```
+
+**Feature Engineering for ML:**
+```python
+import pandas as pd
+from client.fpl_data_client import FPLDataClient
+client = FPLDataClient()
+
+# Get odds data
+odds = client.get_raw_betting_odds()
+
+# Convert odds to implied probabilities
+odds['home_win_prob'] = 1 / odds['B365H']
+odds['draw_prob'] = 1 / odds['B365D']
+odds['away_win_prob'] = 1 / odds['B365A']
+
+# Normalize for bookmaker margin (overround)
+total_prob = odds['home_win_prob'] + odds['draw_prob'] + odds['away_win_prob']
+odds['home_win_prob_adj'] = odds['home_win_prob'] / total_prob
+odds['draw_prob_adj'] = odds['draw_prob'] / total_prob
+odds['away_win_prob_adj'] = odds['away_win_prob'] / total_prob
+
+# Expected goals from over/under markets
+odds['implied_total_goals'] = 2.5 * (
+    odds['B365_over_2_5'] / (odds['B365_over_2_5'] + odds['B365_under_2_5'])
+)
+
+# Odds movement (sharp money indicator)
+odds['home_odds_movement'] = odds['B365CH'] - odds['B365H']  # Positive = odds drifted
+odds['away_odds_movement'] = odds['B365CA'] - odds['B365A']
+
+# Favorite indicator
+odds['home_is_favorite'] = odds['B365H'] < odds['B365A']
+
+# Asian handicap expected margin
+odds['expected_margin'] = odds['AHh']
+
+print(odds[['fixture_id', 'home_win_prob_adj', 'implied_total_goals', 'home_odds_movement']].head())
+```
+
+**ML Use Cases:**
+1. **Win Probability Estimation** - Market consensus on match outcomes
+2. **Expected Goals Proxy** - Over/under 2.5 odds → implied total goals
+3. **Sharp Money Detection** - Compare opening vs closing odds (line movement)
+4. **Fixture Difficulty Enhancement** - Market view more responsive than Elo ratings
+5. **Referee Analysis** - Card/foul pattern predictions
+6. **Defensive/Attacking Returns** - Asian handicap → expected margin
+
+**Data Limitations:**
+- Updates weekly (Mondays typically), not real-time
+- Odds appear 1-2 weeks before matches
+- Some early-season fixtures may lack odds data
+- Use REPLACE strategy (latest odds overwrite previous)
 
 ### Gameweek Performance Data Schema
 

@@ -285,6 +285,52 @@ class DatabaseOperations:
             query_result = session.query(models_raw.RawMyPicks).all()
             return model_to_dataframe(models_raw.RawMyPicks, query_result)
 
+    def save_raw_betting_odds(self, df: pd.DataFrame) -> None:
+        """Save raw betting odds DataFrame to database (REPLACE strategy)."""
+        session = self.session_factory()
+        try:
+            # Delete all existing betting odds (REPLACE strategy)
+            session.query(models_raw.RawBettingOdds).delete()
+
+            # Convert datetime columns
+            df_converted = convert_datetime_columns(df, ["as_of_utc", "match_date"])
+
+            # Insert new data
+            records = df_converted.to_dict("records")
+            session.bulk_insert_mappings(models_raw.RawBettingOdds, records)
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    def get_raw_betting_odds(self, gameweek: int | None = None) -> pd.DataFrame:
+        """Get raw betting odds data as DataFrame.
+
+        Args:
+            gameweek: Optional gameweek filter. If provided, returns odds for that gameweek only.
+
+        Returns:
+            DataFrame with betting odds data
+        """
+        with next(get_session()) as session:
+            if gameweek is not None:
+                # Join with fixtures to filter by gameweek
+                query_result = (
+                    session.query(models_raw.RawBettingOdds)
+                    .join(
+                        models_raw.RawFixtures,
+                        models_raw.RawBettingOdds.fixture_id == models_raw.RawFixtures.fixture_id,
+                    )
+                    .filter(models_raw.RawFixtures.event == gameweek)
+                    .all()
+                )
+            else:
+                query_result = session.query(models_raw.RawBettingOdds).all()
+
+            return model_to_dataframe(models_raw.RawBettingOdds, query_result)
+
     def get_my_manager_data(self) -> pd.DataFrame:
         """Get my manager data (single row).
 

@@ -72,6 +72,57 @@ class FPLDataClient:
         except Exception as e:
             raise RuntimeError(f"Failed to fetch raw fixtures data: {e}") from e
 
+    def get_raw_betting_odds(self, gameweek: int | None = None) -> pd.DataFrame:
+        """Get betting odds data from football-data.co.uk.
+
+        Contains pre-match and closing odds from major bookmakers, plus match statistics.
+
+        Args:
+            gameweek: Optional gameweek filter. If provided, returns odds for that gameweek only.
+
+        Returns:
+            DataFrame with betting odds data (~60 fields per fixture)
+
+        Example:
+            >>> client = FPLDataClient()
+            >>> odds = client.get_raw_betting_odds()  # All fixtures
+            >>> gw_odds = client.get_raw_betting_odds(gameweek=5)  # GW5 only
+        """
+        try:
+            return db_ops.get_raw_betting_odds(gameweek=gameweek)
+        except Exception as e:
+            raise RuntimeError(f"Failed to fetch betting odds data: {e}") from e
+
+    def get_fixtures_with_odds(self) -> pd.DataFrame:
+        """Get FPL fixtures joined with betting odds data.
+
+        Convenience method that combines fixtures and odds data for easy analysis.
+
+        Returns:
+            DataFrame with fixtures left-joined to betting odds.
+            Fixtures without odds will have NaN values in odds columns.
+
+        Example:
+            >>> client = FPLDataClient()
+            >>> fixtures_odds = client.get_fixtures_with_odds()
+            >>> # Analyze home win probability
+            >>> fixtures_odds['home_win_prob'] = 1 / fixtures_odds['B365H']
+        """
+        try:
+            fixtures = self.get_raw_fixtures()
+            odds = self.get_raw_betting_odds()
+
+            if odds.empty:
+                # Return fixtures with empty odds columns
+                return fixtures
+
+            # Left join: keep all fixtures, add odds where available
+            merged = fixtures.merge(odds, on="fixture_id", how="left", suffixes=("", "_odds"))
+
+            return merged
+        except Exception as e:
+            raise RuntimeError(f"Failed to join fixtures with betting odds: {e}") from e
+
     def get_raw_game_settings(self) -> pd.DataFrame:
         """Get complete raw game settings from FPL API bootstrap.
 

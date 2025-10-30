@@ -500,3 +500,101 @@ class RawPlayerGameweekSnapshotSchema(pa.DataFrameModel):
 
     class Config:
         coerce = True
+
+
+class RawBettingOddsSchema(pa.DataFrameModel):
+    """Premier League betting odds data from football-data.co.uk.
+
+    Contains pre-match and closing odds from major bookmakers plus match statistics.
+    Uses REPLACE strategy since odds are mutable until match kickoff.
+    """
+
+    # Primary key - links to FPL fixtures
+    fixture_id: Series[int] = pa.Field(unique=True, ge=1)
+
+    # Match identification (for validation and filtering)
+    match_date: Series[pd.Timestamp]
+    home_team_id: Series[int] = pa.Field(ge=1, le=20)
+    away_team_id: Series[int] = pa.Field(ge=1, le=20)
+
+    # Match context
+    referee: Series[str] = pa.Field(str_length={"min_value": 0}, nullable=True)
+
+    # Match statistics (11 fields) - nullable since not available for future matches
+    HS: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=0)  # Home shots
+    AS: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=0)  # Away shots
+    HST: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=0)  # Home shots on target
+    AST: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=0)  # Away shots on target
+    HC: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=0)  # Home corners
+    AC: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=0)  # Away corners
+    HF: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=0)  # Home fouls
+    AF: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=0)  # Away fouls
+    HY: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=0)  # Home yellow cards
+    AY: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=0)  # Away yellow cards
+    HR: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=0)  # Home red cards
+    AR: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=0)  # Away red cards
+
+    # Pre-match odds - Bet365 (3 fields)
+    B365H: Series[pd.Float64Dtype] = pa.Field(nullable=True, gt=1.0)  # Decimal odds must be > 1.0
+    B365D: Series[pd.Float64Dtype] = pa.Field(nullable=True, gt=1.0)
+    B365A: Series[pd.Float64Dtype] = pa.Field(nullable=True, gt=1.0)
+
+    # Pre-match odds - Pinnacle (3 fields)
+    PSH: Series[pd.Float64Dtype] = pa.Field(nullable=True, gt=1.0)
+    PSD: Series[pd.Float64Dtype] = pa.Field(nullable=True, gt=1.0)
+    PSA: Series[pd.Float64Dtype] = pa.Field(nullable=True, gt=1.0)
+
+    # Pre-match odds - Market aggregates (6 fields)
+    MaxH: Series[pd.Float64Dtype] = pa.Field(nullable=True, gt=1.0)
+    MaxD: Series[pd.Float64Dtype] = pa.Field(nullable=True, gt=1.0)
+    MaxA: Series[pd.Float64Dtype] = pa.Field(nullable=True, gt=1.0)
+    AvgH: Series[pd.Float64Dtype] = pa.Field(nullable=True, gt=1.0)
+    AvgD: Series[pd.Float64Dtype] = pa.Field(nullable=True, gt=1.0)
+    AvgA: Series[pd.Float64Dtype] = pa.Field(nullable=True, gt=1.0)
+
+    # Closing odds - Bet365 (3 fields)
+    B365CH: Series[pd.Float64Dtype] = pa.Field(nullable=True, gt=1.0)
+    B365CD: Series[pd.Float64Dtype] = pa.Field(nullable=True, gt=1.0)
+    B365CA: Series[pd.Float64Dtype] = pa.Field(nullable=True, gt=1.0)
+
+    # Closing odds - Pinnacle (3 fields)
+    PSCH: Series[pd.Float64Dtype] = pa.Field(nullable=True, gt=1.0)
+    PSCD: Series[pd.Float64Dtype] = pa.Field(nullable=True, gt=1.0)
+    PSCA: Series[pd.Float64Dtype] = pa.Field(nullable=True, gt=1.0)
+
+    # Closing odds - Market aggregates (6 fields)
+    MaxCH: Series[pd.Float64Dtype] = pa.Field(nullable=True, gt=1.0)
+    MaxCD: Series[pd.Float64Dtype] = pa.Field(nullable=True, gt=1.0)
+    MaxCA: Series[pd.Float64Dtype] = pa.Field(nullable=True, gt=1.0)
+    AvgCH: Series[pd.Float64Dtype] = pa.Field(nullable=True, gt=1.0)
+    AvgCD: Series[pd.Float64Dtype] = pa.Field(nullable=True, gt=1.0)
+    AvgCA: Series[pd.Float64Dtype] = pa.Field(nullable=True, gt=1.0)
+
+    # Over/Under 2.5 goals - Bet365 (2 fields)
+    B365_over_2_5: Series[pd.Float64Dtype] = pa.Field(nullable=True, gt=1.0)
+    B365_under_2_5: Series[pd.Float64Dtype] = pa.Field(nullable=True, gt=1.0)
+
+    # Over/Under 2.5 goals - Betfair Exchange (2 fields)
+    BFE_over_2_5: Series[pd.Float64Dtype] = pa.Field(nullable=True, gt=1.0)
+    BFE_under_2_5: Series[pd.Float64Dtype] = pa.Field(nullable=True, gt=1.0)
+
+    # Over/Under 2.5 goals - Market aggregates (4 fields)
+    Max_over_2_5: Series[pd.Float64Dtype] = pa.Field(nullable=True, gt=1.0)
+    Max_under_2_5: Series[pd.Float64Dtype] = pa.Field(nullable=True, gt=1.0)
+    Avg_over_2_5: Series[pd.Float64Dtype] = pa.Field(nullable=True, gt=1.0)
+    Avg_under_2_5: Series[pd.Float64Dtype] = pa.Field(nullable=True, gt=1.0)
+
+    # Asian Handicap (7 fields)
+    AHh: Series[pd.Float64Dtype] = pa.Field(nullable=True)  # Can be positive or negative
+    B365AHH: Series[pd.Float64Dtype] = pa.Field(nullable=True, gt=1.0)
+    B365AHA: Series[pd.Float64Dtype] = pa.Field(nullable=True, gt=1.0)
+    PAHH: Series[pd.Float64Dtype] = pa.Field(nullable=True, gt=1.0)
+    PAHA: Series[pd.Float64Dtype] = pa.Field(nullable=True, gt=1.0)
+    AvgAHH: Series[pd.Float64Dtype] = pa.Field(nullable=True, gt=1.0)
+    AvgAHA: Series[pd.Float64Dtype] = pa.Field(nullable=True, gt=1.0)
+
+    # Metadata
+    as_of_utc: Series[pd.Timestamp]
+
+    class Config:
+        coerce = True
