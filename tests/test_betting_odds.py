@@ -11,13 +11,14 @@ Tests cover:
 """
 
 import math
+
 import pandas as pd
 import pytest
 
 from client.fpl_data_client import FPLDataClient
+from fetchers.derived_processor import devig_two_way_probability, lambda_from_over25_prob
 from fetchers.external import fetch_betting_odds_data
 from fetchers.raw_processor import process_raw_betting_odds
-from fetchers.derived_processor import devig_two_way_probability, lambda_from_over25_prob
 from validation.raw_schemas import RawBettingOddsSchema
 
 
@@ -570,7 +571,7 @@ class TestBettingOddsFeatureEngineering:
                 def p_over_from_lambda(lmb: float) -> float:
                     return 1.0 - math.exp(-lmb) * (1.0 + lmb + (lmb * lmb) / 2.0)
 
-                for p, lmb in zip(p_over.dropna().tolist()[:5], lambdas.dropna().tolist()[:5]):
+                for p, lmb in zip(p_over.dropna().tolist()[:5], lambdas.dropna().tolist()[:5], strict=False):
                     assert abs(p_over_from_lambda(lmb) - p) < 1e-4
 
     def test_devig_two_way_probability(self):

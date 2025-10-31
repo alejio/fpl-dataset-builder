@@ -4,6 +4,7 @@ FPL Dataset Builder V0.1
 A minimal, synchronous script to download and normalize FPL data.
 """
 
+import pandas as pd
 import typer
 
 from cli.helpers import (
@@ -102,7 +103,9 @@ def main(
     typer.echo("🎲 Fetching betting odds...")
     betting_odds_updated = False
     try:
-        from fetchers.external import fetch_betting_odds_data
+        import os
+
+        from fetchers.external import fetch_betting_odds_data, fetch_realtime_betting_odds
         from fetchers.raw_processor import process_raw_betting_odds
 
         # Check if odds already exist
@@ -113,21 +116,107 @@ def main(
         except Exception:
             pass
 
-        # Fetch and process odds
-        raw_odds_df = fetch_betting_odds_data(season="2025-26")
-        if not raw_odds_df.empty:
-            fixtures_df = db_ops.get_raw_fixtures()
-            teams_df = db_ops.get_raw_teams_bootstrap()
-            processed_odds = process_raw_betting_odds(raw_odds_df, fixtures_df, teams_df)
+        fixtures_df = db_ops.get_raw_fixtures()
+        teams_df = db_ops.get_raw_teams_bootstrap()
 
-            if not processed_odds.empty:
-                db_ops.save_raw_betting_odds(processed_odds)
-                betting_odds_updated = True
-                typer.echo(f"   ✅ Betting odds updated ({len(processed_odds)} fixtures)")
+        # Step 1: Fetch historical odds from football-data.co.uk (played matches)
+        typer.echo("   📥 Fetching historical odds from football-data.co.uk...")
+        historical_odds = pd.DataFrame()
+        try:
+            raw_odds_df = fetch_betting_odds_data(season="2025-26")
+            if not raw_odds_df.empty:
+                processed_historical = process_raw_betting_odds(raw_odds_df, fixtures_df, teams_df)
+                if not processed_historical.empty:
+                    historical_odds = processed_historical
+                    typer.echo(f"   ✅ Historical odds: {len(historical_odds)} fixtures")
+                else:
+                    typer.echo("   ⚠️  No historical odds could be matched to fixtures")
             else:
-                typer.echo("   ⚠️  No betting odds could be matched to fixtures")
+                typer.echo("   ⚠️  Failed to fetch historical odds (will continue with real-time only)")
+        except Exception as e:
+            typer.echo(f"   ⚠️  Error fetching historical odds: {str(e)[:100]}")
+
+        # Step 2: Determine next gameweek and fetch real-time odds
+        next_gameweek = None
+        realtime_odds = pd.DataFrame()
+
+        # Determine which gameweek needs real-time odds (next upcoming gameweek)
+        if current_gameweek:
+            if is_finished:
+                # Current GW finished, fetch odds for next GW
+                next_gameweek = current_gameweek + 1
+            else:
+                # Current GW in progress, fetch odds for current GW
+                next_gameweek = current_gameweek
         else:
-            typer.echo("   ⚠️  Failed to fetch betting odds data")
+            # Season hasn't started, use GW1
+            next_gameweek = 1
+
+        if next_gameweek:
+            # Check if fixtures exist for this gameweek
+            gw_fixtures = fixtures_df[fixtures_df["event"] == next_gameweek]
+            if not gw_fixtures.empty:
+                # Check if any fixtures are upcoming (not finished)
+                # finished column may not exist or may be NaN/False for upcoming matches
+                finished_col = gw_fixtures.get(
+                    "finished", pd.Series([False] * len(gw_fixtures), index=gw_fixtures.index)
+                )
+                upcoming_fixtures = gw_fixtures[not finished_col.fillna(False)]
+
+                if not upcoming_fixtures.empty:
+                    # Fetch real-time odds for upcoming gameweek
+                    typer.echo(f"   ⚡ Fetching real-time odds for GW{next_gameweek} from The Odds API...")
+                    api_key = os.getenv("ODDS_API_KEY")
+                    if api_key:
+                        try:
+                            raw_realtime_df = fetch_realtime_betting_odds(api_key=api_key, gameweek=next_gameweek)
+                            if not raw_realtime_df.empty:
+                                processed_realtime = process_raw_betting_odds(raw_realtime_df, fixtures_df, teams_df)
+
+                                # Filter to only include fixtures for the next gameweek
+                                gw_fixture_ids = set(gw_fixtures["fixture_id"].tolist())
+                                processed_realtime = processed_realtime[
+                                    processed_realtime["fixture_id"].isin(gw_fixture_ids)
+                                ]
+
+                                if not processed_realtime.empty:
+                                    realtime_odds = processed_realtime
+                                    typer.echo(
+                                        f"   ✅ Real-time odds: {len(realtime_odds)} fixtures for GW{next_gameweek}"
+                                    )
+                                else:
+                                    typer.echo(
+                                        f"   ⚠️  Real-time odds fetched but none matched GW{next_gameweek} fixtures"
+                                    )
+                            else:
+                                typer.echo(f"   ⚠️  No real-time odds available for GW{next_gameweek}")
+                        except Exception as e:
+                            typer.echo(f"   ⚠️  Error fetching real-time odds: {str(e)[:100]}")
+                    else:
+                        typer.echo(f"   ℹ️  ODDS_API_KEY not set - skipping real-time odds for GW{next_gameweek}")
+                        typer.echo("      Set ODDS_API_KEY env var to enable real-time odds for upcoming gameweeks")
+
+        # Step 3: Merge historical and real-time odds
+        all_odds = pd.DataFrame()
+        if not historical_odds.empty and not realtime_odds.empty:
+            # Merge: real-time odds take precedence for overlapping fixtures
+            all_odds = pd.concat([historical_odds, realtime_odds]).drop_duplicates(subset=["fixture_id"], keep="last")
+            typer.echo(
+                f"   ✅ Merged odds: {len(historical_odds)} historical + {len(realtime_odds)} real-time = {len(all_odds)} total"
+            )
+        elif not historical_odds.empty:
+            all_odds = historical_odds
+        elif not realtime_odds.empty:
+            all_odds = realtime_odds
+
+        # Step 4: Save merged odds
+        if not all_odds.empty:
+            db_ops.save_raw_betting_odds(all_odds)
+            betting_odds_updated = True
+            typer.echo(f"   ✅ Betting odds saved: {len(all_odds)} fixtures total")
+        else:
+            typer.echo("   ⚠️  No betting odds available to save")
+
     except Exception as e:
         typer.echo(f"   ⚠️  Error fetching betting odds: {str(e)[:100]}")
     typer.echo()
@@ -402,6 +491,133 @@ def fetch_betting_odds(
     typer.echo("   odds = client.get_raw_betting_odds()")
     typer.echo()
     typer.echo("💡 Tip: Use 'uv run main.py main --with-betting-odds' to fetch odds automatically")
+
+
+@app.command()
+def fetch_realtime_odds(
+    gameweek: int = typer.Option(None, help="Gameweek to fetch odds for (defaults to current)"),
+    api_key: str = typer.Option(None, help="The Odds API key (or set ODDS_API_KEY env var)"),
+    merge: bool = typer.Option(True, help="Merge with existing odds instead of replacing"),
+):
+    """Fetch real-time pre-match betting odds from The Odds API for upcoming fixtures.
+
+    This command fetches current betting odds for upcoming Premier League matches,
+    which is essential for ML inference before gameweek deadlines when historical
+    data sources don't have pre-match odds available.
+
+    The Odds API provides:
+    - 500 free requests/month
+    - Real-time odds from multiple bookmakers (Bet365, Pinnacle, etc.)
+    - Pre-match odds for upcoming fixtures
+    - Register at https://the-odds-api.com/
+
+    Example usage:
+        uv run main.py fetch-realtime-odds                    # Fetch all upcoming matches
+        uv run main.py fetch-realtime-odds --gameweek 10       # Fetch for specific gameweek
+        uv run main.py fetch-realtime-odds --api-key YOUR_KEY  # Use specific API key
+    """
+    import os
+
+    from fetchers.external import fetch_realtime_betting_odds
+    from fetchers.raw_processor import process_raw_betting_odds
+
+    typer.echo("⚡ Fetching Real-Time Betting Odds (The Odds API)")
+    typer.echo()
+
+    # Initialize data environment
+    initialize_data_environment()
+
+    # Get API key
+    if api_key is None:
+        api_key = os.getenv("ODDS_API_KEY")
+        if api_key is None:
+            typer.echo("❌ ODDS_API_KEY environment variable not set")
+            typer.echo()
+            typer.echo("📝 To get an API key:")
+            typer.echo("   1. Register at https://the-odds-api.com/")
+            typer.echo("   2. Get your API key from the dashboard")
+            typer.echo("   3. Set it: export ODDS_API_KEY='your-key'")
+            typer.echo("   Or pass it: --api-key YOUR_KEY")
+            raise typer.Exit(1)
+
+    # Get fixtures and teams for processing
+    from db.operations import db_ops
+
+    fixtures_df = db_ops.get_raw_fixtures()
+    teams_df = db_ops.get_raw_teams_bootstrap()
+
+    if fixtures_df.empty or teams_df.empty:
+        typer.echo("❌ Cannot process betting odds: fixtures or teams data not available")
+        typer.echo("   Run 'uv run main.py main' first to fetch FPL data")
+        raise typer.Exit(1)
+
+    # Determine gameweek if not specified
+    if gameweek is None:
+        from fetchers import get_current_gameweek
+
+        bootstrap = db_ops.get_raw_events_bootstrap()
+        current_gw, _ = get_current_gameweek(bootstrap)
+        if current_gw:
+            gameweek = current_gw
+            typer.echo(f"ℹ️  Using current gameweek: GW{gameweek}")
+
+    # Fetch raw betting odds
+    typer.echo("📥 Fetching real-time odds from The Odds API...")
+    raw_odds_df = fetch_realtime_betting_odds(api_key=api_key, gameweek=gameweek)
+
+    if raw_odds_df.empty:
+        typer.echo("❌ Failed to fetch real-time betting odds")
+        typer.echo("   This could mean:")
+        typer.echo("   - No upcoming matches available")
+        typer.echo("   - API key is invalid")
+        typer.echo("   - Rate limit exceeded (500 free requests/month)")
+        raise typer.Exit(1)
+
+    # Process and match to fixtures
+    typer.echo("🔄 Processing betting odds data...")
+    processed_odds = process_raw_betting_odds(raw_odds_df, fixtures_df, teams_df)
+
+    # Filter by gameweek if specified
+    if gameweek is not None:
+        gw_fixtures = fixtures_df[fixtures_df["event"] == gameweek]
+        gw_fixture_ids = set(gw_fixtures["fixture_id"].tolist())
+        processed_odds = processed_odds[processed_odds["fixture_id"].isin(gw_fixture_ids)]
+        typer.echo(f"   Filtered to {len(processed_odds)} fixtures for GW{gameweek}")
+
+    if processed_odds.empty:
+        typer.echo("⚠️  No betting odds could be matched to fixtures")
+        if gameweek:
+            typer.echo(f"   No matches found for gameweek {gameweek}")
+        raise typer.Exit(1)
+
+    # Save to database
+    typer.echo("💾 Saving betting odds to database...")
+    if merge:
+        # Merge with existing odds (update/append)
+        existing_odds = db_ops.get_raw_betting_odds()
+        if not existing_odds.empty:
+            # Combine: keep existing, update/append with new
+            # Remove duplicates based on fixture_id (new wins)
+            combined = pd.concat([existing_odds, processed_odds]).drop_duplicates(subset=["fixture_id"], keep="last")
+            db_ops.save_raw_betting_odds(combined)
+            typer.echo(f"   Merged with existing odds: {len(combined)} total fixtures")
+        else:
+            db_ops.save_raw_betting_odds(processed_odds)
+    else:
+        # Replace all odds
+        db_ops.save_raw_betting_odds(processed_odds)
+
+    typer.echo()
+    typer.echo("🎉 Real-time betting odds fetch completed!")
+    typer.echo(f"✅ {len(processed_odds)} fixtures with odds saved")
+    typer.echo()
+    typer.echo("📊 Access data via client:")
+    typer.echo("   from client.fpl_data_client import FPLDataClient")
+    typer.echo("   client = FPLDataClient()")
+    if gameweek:
+        typer.echo(f"   odds = client.get_raw_betting_odds(gameweek={gameweek})")
+    else:
+        typer.echo("   odds = client.get_raw_betting_odds()")
 
 
 # Create backfill subcommand group
