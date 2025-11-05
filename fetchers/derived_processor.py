@@ -262,7 +262,16 @@ class DerivedDataProcessor:
             # Select odds for home/away
             home_sel = select_team_odds(row, "H")
             away_sel = select_team_odds(row, "A")
-            draw_close = row.get("AvgCD") if pd.notna(row.get("AvgCD")) else row.get("B365CD")
+            # Select draw odds: closing avg → Bet365 closing → opening avg → Bet365 opening
+            draw_close = (
+                row.get("AvgCD")
+                if pd.notna(row.get("AvgCD"))
+                else row.get("B365CD")
+                if pd.notna(row.get("B365CD"))
+                else row.get("AvgD")
+                if pd.notna(row.get("AvgD"))
+                else row.get("B365D")
+            )
 
             # Implied probabilities (unnormalized)
             p_home = 1.0 / home_sel["odds"] if home_sel["odds"] and home_sel["odds"] > 0 else np.nan
