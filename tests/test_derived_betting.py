@@ -106,11 +106,7 @@ class TestDerivedBettingClientSanity:
         assert cols.issubset(set(derived.columns))
 
         # Probabilities are between 0 and 1 and sum close to 1
-        probs_sum = (
-            derived["team_win_probability"]
-            + derived["opponent_win_probability"]
-            + derived["draw_probability"]
-        )
+        probs_sum = derived["team_win_probability"] + derived["opponent_win_probability"] + derived["draw_probability"]
         assert (derived["team_win_probability"].between(0, 1)).all()
         assert (derived["opponent_win_probability"].between(0, 1)).all()
         assert (derived["draw_probability"].between(0, 1)).all()
@@ -162,9 +158,14 @@ class TestDerivedBettingClientSanity:
         # Identify team ids (handle possible naming)
         def find_team_id(df: pd.DataFrame, names: list[str]) -> int | None:
             for n in names:
-                match = df[(df["name"].str.contains(n, case=False, na=False)) | (df["short_name"].str.contains(n, case=False, na=False))]
+                match = df[
+                    (df["name"].str.contains(n, case=False, na=False))
+                    | (df["short_name"].str.contains(n, case=False, na=False))
+                ]
                 if not match.empty:
-                    return int(match.iloc[0]["team_id"]) if "team_id" in match.columns else int(match.iloc[0]["id"])  # safety
+                    return (
+                        int(match.iloc[0]["team_id"]) if "team_id" in match.columns else int(match.iloc[0]["id"])
+                    )  # safety
             return None
 
         man_city_id = find_team_id(teams, ["Man City", "Manchester City", "MCI"])  # typical short_name MCI
@@ -182,16 +183,14 @@ class TestDerivedBettingClientSanity:
 
         # Filter rows where the team's opponent is the other
         is_mc_row = bet["team_id"] == man_city_id
-        mc_vs_bur = bet[is_mc_row & (
-            (bet["home_team_id"] == burnley_id) | (bet["away_team_id"] == burnley_id)
-        )]
+        mc_vs_bur = bet[is_mc_row & ((bet["home_team_id"] == burnley_id) | (bet["away_team_id"] == burnley_id))]
 
         if mc_vs_bur.empty:
             # No such fixture in current odds sample; skip
             return
 
         # Man City should generally have higher win probability than opponent
-        assert (mc_vs_bur["team_win_probability"].mean() > mc_vs_bur["opponent_win_probability"].mean())
+        assert mc_vs_bur["team_win_probability"].mean() > mc_vs_bur["opponent_win_probability"].mean()
 
         # Many rows should be flagged as favourite
         assert (mc_vs_bur["favorite_status"] >= 0.5).mean() > 0.7

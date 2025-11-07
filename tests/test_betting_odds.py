@@ -582,10 +582,11 @@ class TestBettingOddsFeatureEngineering:
         # Skewed market example
         p = devig_two_way_probability(1.80, 2.00)
         # Raw implied: over=0.555..., under=0.5 => normalized over ≈ 0.526315789
-        assert abs(p - (1/1.80) / ((1/1.80) + (1/2.00))) < 1e-12
+        assert abs(p - (1 / 1.80) / ((1 / 1.80) + (1 / 2.00))) < 1e-12
 
     def test_lambda_from_over25_prob_inversion(self):
         """Binary search inversion should match the Poisson tail within tolerance."""
+
         def p_over_from_lambda(lmb: float) -> float:
             return 1.0 - math.exp(-lmb) * (1.0 + lmb + (lmb * lmb) / 2.0)
 
