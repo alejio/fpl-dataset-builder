@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "fpl-dataset-builder"
-version = "0.1.0"
+version = "0.2.0"
 description = "A minimal FPL dataset builder for fantasy football modeling"
 requires-python = ">=3.11"
 dependencies = [
@@ -12,7 +12,7 @@ dependencies = [
     "requests>=2.28.0",
     "pydantic>=2.0.0",
     "typer>=0.9.0",
-    "pandera==0.25.0",
+    "pandera>=0.26.0",
     "sqlalchemy>=2.0.0",
     "alembic>=1.8.0",
     "fpl-mcp>=0.1.6",
