@@ -32,7 +32,7 @@ Usage:
 import typer
 
 from db.operations import DatabaseOperations
-from fetchers.fpl_api import fetch_fpl_bootstrap, fetch_gameweek_live_data
+from fetchers.fpl_api import fetch_fpl_bootstrap, fetch_fpl_fixtures, fetch_gameweek_live_data
 from fetchers.live_data import get_current_gameweek
 from fetchers.raw_processor import process_raw_gameweek_performance
 
@@ -75,8 +75,14 @@ def backfill_gameweek(
         elif "elements" not in live_data or not live_data["elements"]:
             print(f"  ⚠️  No player data found for gameweek {gameweek}")
         else:
-            # Process the player performance data with bootstrap data for prices
-            gameweek_performance_df = process_raw_gameweek_performance(live_data, gameweek, bootstrap_data)
+            # Fetch fixtures data for opponent_team lookup
+            print("  🔄 Fetching fixtures data for opponent_team lookup...")
+            fixtures_data = fetch_fpl_fixtures()
+
+            # Process the player performance data with bootstrap and fixtures data
+            gameweek_performance_df = process_raw_gameweek_performance(
+                live_data, gameweek, bootstrap_data, fixtures_data
+            )
 
             if gameweek_performance_df.empty:
                 print(f"  ⚠️  Processed player performance data is empty for gameweek {gameweek}")

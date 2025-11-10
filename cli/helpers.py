@@ -142,7 +142,10 @@ def fetch_and_save_gameweek_data(
     # Fetch live gameweek performance data
     live_data = fetch_gameweek_live_data(gameweek)
     if live_data:
-        gameweek_performance_df = process_raw_gameweek_performance(live_data, gameweek, bootstrap)
+        # Fetch fixtures data for opponent_team lookup
+        fixtures_data = fetch_fpl_fixtures()
+
+        gameweek_performance_df = process_raw_gameweek_performance(live_data, gameweek, bootstrap, fixtures_data)
 
         if not gameweek_performance_df.empty:
             db_ops = DatabaseOperations()

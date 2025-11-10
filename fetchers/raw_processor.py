@@ -537,7 +537,7 @@ def process_raw_my_picks(manager_data: dict[str, Any]) -> pd.DataFrame:
 
 
 def process_raw_gameweek_performance(
-    live_data: dict[str, Any], gameweek: int, bootstrap_data: dict[str, Any] = None
+    live_data: dict[str, Any], gameweek: int, bootstrap_data: dict[str, Any] = None, fixtures_data: list[dict] = None
 ) -> pd.DataFrame:
     """Convert raw gameweek live data to DataFrame with proper value population."""
     print(f"Processing gameweek {gameweek} performance data...")
@@ -551,7 +551,7 @@ def process_raw_gameweek_performance(
         print("Warning: No player performance data found")
         return pd.DataFrame()
 
-    # Create a lookup for player prices from bootstrap data
+    # Create a lookup for player prices and teams from bootstrap data
     player_prices = {}
     player_teams = {}
     if bootstrap_data and "elements" in bootstrap_data:
@@ -560,6 +560,17 @@ def process_raw_gameweek_performance(
             if player_id:
                 player_prices[player_id] = player.get("now_cost")  # Price in 0.1M units
                 player_teams[player_id] = player.get("team")
+
+    # Create a lookup for fixtures (fixture_id -> {team_h, team_a})
+    fixtures_lookup = {}
+    if fixtures_data:
+        for fixture in fixtures_data:
+            fixture_id = fixture.get("id")
+            if fixture_id:
+                fixtures_lookup[fixture_id] = {
+                    "team_h": fixture.get("team_h"),
+                    "team_a": fixture.get("team_a"),
+                }
 
     processed_performances = []
     timestamp = pd.Timestamp.now(tz="UTC")
@@ -572,16 +583,35 @@ def process_raw_gameweek_performance(
         # Get fixture info from explain data (for opponent, home/away)
         opponent_team = None
         was_home = None
-        if explain:
+        player_team_id = player_teams.get(element_id)
+
+        if explain and player_team_id:
             for fixture_data in explain:
-                # fixture can be an integer (fixture ID) or a dict
                 fixture = fixture_data.get("fixture")
-                if isinstance(fixture, dict):
+
+                # Handle fixture as integer ID (most common case)
+                if isinstance(fixture, int) and fixture in fixtures_lookup:
+                    fixture_info = fixtures_lookup[fixture]
+                    team_h = fixture_info["team_h"]
+                    team_a = fixture_info["team_a"]
+
+                    # Determine opponent and home/away based on player's team
+                    if player_team_id == team_h:
+                        opponent_team = team_a
+                        was_home = True
+                    elif player_team_id == team_a:
+                        opponent_team = team_h
+                        was_home = False
+                    break
+
+                # Legacy support: fixture as dict (rare)
+                elif isinstance(fixture, dict):
                     opponent_team = fixture.get("opponent_team")
                     was_home = fixture.get("is_home")
                     break
+
+                # Legacy support: fixture as list (rare)
                 elif isinstance(fixture, list) and fixture:
-                    # If it's a list, take the first item
                     first_fixture = fixture[0]
                     if isinstance(first_fixture, dict):
                         opponent_team = first_fixture.get("opponent_team")
