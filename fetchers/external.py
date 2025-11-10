@@ -3,6 +3,7 @@
 from io import StringIO
 
 import pandas as pd
+import requests
 
 from utils import http_get
 
@@ -164,8 +165,6 @@ def fetch_realtime_betting_odds(api_key: str | None = None, gameweek: int | None
         }
 
         # Make request with query parameters
-        import requests
-
         try:
             response = requests.get(url, params=params, timeout=30)
             response.raise_for_status()

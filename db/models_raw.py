@@ -31,8 +31,8 @@ class RawPlayerBootstrap(Base):
     # Team and position
     team_id: Mapped[int] = mapped_column("team", Integer, index=True)
     position_id: Mapped[int] = mapped_column("element_type", Integer, index=True)  # 1=GKP, 2=DEF, 3=MID, 4=FWD
-    team_code: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    squad_number: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    team_code: Mapped[int | None] = mapped_column(Integer, nullable=False)
+    squad_number: Mapped[int | None] = mapped_column(Integer, nullable=False, index=True)
 
     # Availability and status
     can_transact: Mapped[bool] = mapped_column(Boolean)
@@ -44,7 +44,7 @@ class RawPlayerBootstrap(Base):
     news_added: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # Pricing and value
-    now_cost: Mapped[int | None] = mapped_column(Integer, index=True, nullable=True)  # API stores as 10x actual price
+    now_cost: Mapped[int | None] = mapped_column(Integer, index=True, nullable=False)  # API stores as 10x actual price
     cost_change_event: Mapped[int | None] = mapped_column(Integer, nullable=True)
     cost_change_event_fall: Mapped[int | None] = mapped_column(Integer, nullable=True)
     cost_change_start: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -53,7 +53,7 @@ class RawPlayerBootstrap(Base):
     value_season: Mapped[str] = mapped_column(String(10))
 
     # Performance stats
-    total_points: Mapped[int | None] = mapped_column(Integer, index=True, nullable=True)
+    total_points: Mapped[int | None] = mapped_column(Integer, index=True, nullable=False)
     event_points: Mapped[int | None] = mapped_column(Integer, nullable=True)
     points_per_game: Mapped[str] = mapped_column(String(10))
     form: Mapped[str] = mapped_column(String(10), index=True)
