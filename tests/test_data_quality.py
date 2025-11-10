@@ -1,17 +1,49 @@
-"""Data quality tests for database tables.
+"""Comprehensive data quality tests for database tables.
 
-Tests enforce null constraints defined in Pandera schemas to ensure data integrity.
+Tests enforce multiple types of data quality constraints to ensure data integrity:
+- Null constraints (fields marked as non-nullable)
+- Range constraints (ge, le, gt, lt validations)
+- Enum/isin constraints (valid value sets)
+- Uniqueness constraints (primary keys, unique fields)
+- Referential integrity (foreign key relationships)
+- Business logic rules (conditional validations)
+- Data completeness (coverage metrics)
+
 All tests read directly from the database using FPLDataClient and validate against
-the corresponding Pandera schema with strict null checking.
+the corresponding Pandera schemas.
 
 ## What This Tests
 
-This module validates that database tables respect null constraints defined in:
-- validation/raw_schemas.py (raw FPL API data)
-- validation/derived_schemas.py (derived analytics data)
-
-It checks that fields marked as `nullable=False` in Pandera schemas do not contain
+### Null Constraints
+Validates that fields marked as `nullable=False` in Pandera schemas do not contain
 null values in the actual database.
+
+### Range Constraints
+Validates that numeric fields respect their defined ranges (e.g., team_id 1-20,
+position_id 1-4, odds > 1.0).
+
+### Enum/Isin Constraints
+Validates that fields with restricted value sets contain only valid values
+(e.g., status in ['a', 'i', 's', 'u', 'd', 'n']).
+
+### Uniqueness Constraints
+Validates that primary keys and unique fields have no duplicates.
+
+### Referential Integrity
+Validates that foreign key relationships are valid:
+- Fixtures reference valid teams
+- Players reference valid teams and positions
+- Betting odds reference valid fixtures
+
+### Business Logic Rules
+Validates domain-specific rules:
+- Finished fixtures must have scores
+- Scores must be non-negative
+- Home and away teams must be different
+- Only one gameweek can be current
+
+### Data Completeness
+Reports on overall data coverage and completeness metrics.
 
 ## How to Run
 
@@ -19,31 +51,55 @@ null values in the actual database.
 # Run all data quality tests
 uv run pytest tests/test_data_quality.py -v
 
-# Run specific table test
+# Run specific test category
 uv run pytest tests/test_data_quality.py::test_raw_table_null_constraints -k "raw_players"
+uv run pytest tests/test_data_quality.py::test_referential_integrity_fixtures
+uv run pytest tests/test_data_quality.py::test_raw_fixtures_business_logic
 
-# See data quality summary report
+# See data quality summary reports
 uv run pytest tests/test_data_quality.py::test_data_quality_summary -v -s
+uv run pytest tests/test_data_quality.py::test_data_completeness_summary -v -s
 ```
 
 ## Understanding Failures
 
-When a test fails, it means:
-1. A field in the Pandera schema is marked as `nullable=False`
-2. But the database actually contains null values for that field
-3. This is a data quality issue that needs to be fixed
+When a test fails, it indicates a data quality violation:
+
+1. **Null constraint violations**: Fields marked non-nullable contain nulls
+2. **Range violations**: Values outside expected ranges
+3. **Enum violations**: Invalid values in restricted fields
+4. **Uniqueness violations**: Duplicate values in unique fields
+5. **Referential integrity violations**: Invalid foreign key references
+6. **Business logic violations**: Domain rules not satisfied
 
 To fix:
-1. Check if the field should allow nulls (update schema to `nullable=True`)
-2. Or fix the data processing to ensure the field is always populated
-3. Or investigate why the FPL API is returning null values
+1. Check if the constraint is correct (update schema if needed)
+2. Fix the data processing to ensure constraints are met
+3. Investigate why the FPL API is returning invalid data
+4. Add data cleaning/validation steps in the processing pipeline
 
 ## Test Coverage
 
-- ✅ 10 raw FPL API tables
-- ✅ 6 derived analytics tables
-- ✅ Player availability snapshots (gameweek-based)
+- ✅ 10 raw FPL API tables (null constraints)
+- ✅ 6 derived analytics tables (null constraints)
+- ✅ Player availability snapshots (null constraints)
+- ✅ Range constraints (players, teams, events, betting odds, derived metrics)
+- ✅ Enum/isin constraints (status, positions, trends)
+- ✅ Uniqueness constraints (primary keys)
+- ✅ Referential integrity (fixtures→teams, players→teams/positions, odds→fixtures)
+- ✅ Business logic rules (fixtures, events)
 - ✅ Data quality summary report
+- ✅ Data completeness summary report
+
+## Test Categories
+
+1. **Null Constraints**: `test_raw_table_null_constraints`, `test_derived_table_null_constraints`
+2. **Range Constraints**: `test_raw_players_range_constraints`, `test_betting_odds_range_constraints`
+3. **Enum Constraints**: `test_raw_players_enum_constraints`
+4. **Uniqueness**: `test_raw_players_uniqueness_constraints`
+5. **Referential Integrity**: `test_referential_integrity_*`
+6. **Business Logic**: `test_raw_fixtures_business_logic`, `test_raw_events_constraints`
+7. **Completeness**: `test_data_completeness_summary`
 """
 
 import pytest
@@ -327,43 +383,52 @@ def test_raw_players_range_constraints(client):
     if df.empty:
         pytest.skip("No players data available")
 
-    schema_obj = RawPlayersBootstrapSchema.to_schema()
     violations = []
 
-    for col_name, col_schema in schema_obj.columns.items():
-        if col_name not in df.columns:
-            continue
+    # Check key range constraints manually (Pandera constraint extraction is complex)
+    # Check team_id (should be 1-20)
+    if 'team_id' in df.columns:
+        invalid = df[(df['team_id'] < 1) | (df['team_id'] > 20)]
+        if len(invalid) > 0:
+            violations.append(
+                f"  - team_id: {len(invalid)} values outside [1, 20] range"
+            )
 
-        # Check range constraints
-        checks = col_schema.checks if hasattr(col_schema, 'checks') else []
-        for check in checks:
-            if hasattr(check, 'error'):
-                # Pandera check object
-                check_name = check.name if hasattr(check, 'name') else str(check)
+    # Check position_id (should be 1-4)
+    if 'position_id' in df.columns:
+        invalid = df[(df['position_id'] < 1) | (df['position_id'] > 4)]
+        if len(invalid) > 0:
+            violations.append(
+                f"  - position_id: {len(invalid)} values outside [1, 4] range"
+            )
 
-                # Check ge (greater than or equal)
-                if 'ge' in check_name or hasattr(check, 'ge'):
-                    ge_value = getattr(check, 'ge', None)
-                    if ge_value is not None:
-                        invalid = df[col_name] < ge_value
-                        invalid_count = invalid.sum()
-                        if invalid_count > 0:
-                            violations.append(
-                                f"  - {col_name}: {invalid_count} values < {ge_value} "
-                                f"(min: {df[col_name].min()})"
-                            )
+    # Check now_cost (should be 35-150, API stores as 10x actual price)
+    if 'now_cost' in df.columns:
+        invalid = df[(df['now_cost'].notna()) & ((df['now_cost'] < 35) | (df['now_cost'] > 150))]
+        if len(invalid) > 0:
+            violations.append(
+                f"  - now_cost: {len(invalid)} values outside [35, 150] range"
+            )
 
-                # Check le (less than or equal)
-                if 'le' in check_name or hasattr(check, 'le'):
-                    le_value = getattr(check, 'le', None)
-                    if le_value is not None:
-                        invalid = df[col_name] > le_value
-                        invalid_count = invalid.sum()
-                        if invalid_count > 0:
-                            violations.append(
-                                f"  - {col_name}: {invalid_count} values > {le_value} "
-                                f"(max: {df[col_name].max()})"
-                            )
+    # Check chance_of_playing fields (should be 0-100 if not null)
+    for field in ['chance_of_playing_this_round', 'chance_of_playing_next_round']:
+        if field in df.columns:
+            invalid = df[(df[field].notna()) & ((df[field] < 0) | (df[field] > 100))]
+            if len(invalid) > 0:
+                violations.append(
+                    f"  - {field}: {len(invalid)} values outside [0, 100] range"
+                )
+
+    # Check non-negative stats
+    non_negative_fields = ['transfers_in', 'transfers_out', 'minutes', 'starts',
+                          'goals_scored', 'assists', 'clean_sheets', 'goals_conceded']
+    for field in non_negative_fields:
+        if field in df.columns:
+            invalid = df[(df[field].notna()) & (df[field] < 0)]
+            if len(invalid) > 0:
+                violations.append(
+                    f"  - {field}: {len(invalid)} negative values (should be >= 0)"
+                )
 
     if violations:
         pytest.fail(
@@ -708,19 +773,17 @@ def test_raw_teams_constraints(client):
                 f"(expected 1-20)"
             )
 
-    # Check strength ratings should be 1-5
-    strength_fields = ['strength', 'strength_overall_home', 'strength_overall_away',
-                      'strength_attack_home', 'strength_attack_away',
-                      'strength_defence_home', 'strength_defence_away']
+    # Check base strength rating should be 1-5
+    if 'strength' in df.columns:
+        invalid = df[(df['strength'] < 1) | (df['strength'] > 5)]
+        if len(invalid) > 0:
+            violations.append(
+                f"  - strength: {len(invalid)} invalid strength ratings "
+                f"(expected 1-5)"
+            )
 
-    for field in strength_fields:
-        if field in df.columns:
-            invalid = df[(df[field] < 1) | (df[field] > 5)]
-            if len(invalid) > 0:
-                violations.append(
-                    f"  - {field}: {len(invalid)} invalid strength ratings "
-                    f"(expected 1-5)"
-                )
+    # Note: strength_overall_home/away and other strength fields use different scales
+    # (typically 1000-1400 range), so we don't validate those here
 
     # Check played games should be 0-38
     if 'played' in df.columns:
