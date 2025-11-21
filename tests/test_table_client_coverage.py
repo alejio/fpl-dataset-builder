@@ -71,7 +71,7 @@ class TestTableClientCoverage:
             "raw_chips": ["get_raw_chips"],
             "raw_phases": ["get_raw_phases"],
             "raw_my_manager": ["get_my_manager_data"],
-            "raw_my_picks": ["get_my_current_picks", "get_my_picks_history"],
+            "raw_my_picks": ["get_my_current_picks", "get_my_picks_history", "get_my_chip_usage"],
             # Gameweek Historical Data
             "raw_player_gameweek_performance": [
                 "get_player_gameweek_history",
@@ -191,6 +191,7 @@ class TestTableClientCoverage:
             "get_my_manager_data",
             "get_my_current_picks",
             "get_my_picks_history",
+            "get_my_chip_usage",
         ]
 
         missing = [method for method in required_manager_methods if not hasattr(client, method)]

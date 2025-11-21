@@ -325,6 +325,47 @@ class FPLDataClient:
         except Exception as e:
             raise RuntimeError(f"Failed to fetch picks history: {e}") from e
 
+    def get_my_chip_usage(self, start_gw: int = None, end_gw: int = None) -> pd.DataFrame:
+        """Get historical chip usage across gameweeks.
+
+        Args:
+            start_gw: Starting gameweek (optional)
+            end_gw: Ending gameweek (optional)
+
+        Returns:
+            DataFrame with columns: gameweek, chip_used
+            Each row represents one gameweek and the chip used (if any)
+
+        Example:
+            >>> client = FPLDataClient()
+            >>> chips = client.get_my_chip_usage()
+            >>> chips = client.get_my_chip_usage(start_gw=1, end_gw=10)
+        """
+        try:
+            df = db_ops.get_raw_my_picks()
+
+            if df.empty:
+                return pd.DataFrame(columns=["gameweek", "chip_used"])
+
+            # Filter by gameweek range if specified
+            if start_gw is not None:
+                df = df[df["event"] >= start_gw]
+            if end_gw is not None:
+                df = df[df["event"] <= end_gw]
+
+            # Get unique gameweek-chip combinations (chip is same for all picks in a gameweek)
+            # Group by gameweek and take first chip_used value
+            chip_usage = (
+                df[["event", "chip_used"]]
+                .drop_duplicates(subset=["event"])
+                .rename(columns={"event": "gameweek"})
+                .sort_values("gameweek")
+            )
+
+            return chip_usage
+        except Exception as e:
+            raise RuntimeError(f"Failed to fetch chip usage history: {e}") from e
+
     def get_gameweek_performance(self, gameweek: int) -> pd.DataFrame:
         """Get all player performances for a specific gameweek.
 
@@ -920,6 +961,20 @@ def get_my_manager_data() -> pd.DataFrame:
 def get_my_current_picks() -> pd.DataFrame:
     """Get my current gameweek team picks."""
     return _get_client().get_my_current_picks()
+
+
+def get_my_chip_usage(start_gw: int = None, end_gw: int = None) -> pd.DataFrame:
+    """Get historical chip usage across gameweeks.
+
+    Args:
+        start_gw: Starting gameweek (optional)
+        end_gw: Ending gameweek (optional)
+
+    Returns:
+        DataFrame with columns: gameweek, chip_used
+        Each row represents one gameweek and the chip used (if any)
+    """
+    return _get_client().get_my_chip_usage(start_gw=start_gw, end_gw=end_gw)
 
 
 def get_players_enhanced() -> pd.DataFrame:

@@ -25,6 +25,7 @@ from .fpl_data_client import (
     get_derived_value_analysis,
     get_fixtures_normalized,
     get_gameweek_live_data,
+    get_my_chip_usage,
     get_my_current_picks,
     get_my_manager_data,
     get_player_xg_xa_rates,
@@ -44,6 +45,7 @@ __all__ = [
     "FPLDataClient",
     "get_database_summary",
     "get_data_freshness",
+    "get_my_chip_usage",
     "get_my_current_picks",
     "get_my_manager_data",
     # Legacy compatibility functions

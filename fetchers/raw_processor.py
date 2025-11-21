@@ -513,6 +513,9 @@ def process_raw_my_picks(manager_data: dict[str, Any]) -> pd.DataFrame:
     processed_picks = []
     timestamp = pd.Timestamp.now(tz="UTC")
 
+    # Get chip used for this gameweek (from active_chip field in picks response)
+    chip_used = manager_data.get("active_chip")
+
     for pick in picks:
         processed_pick = {
             "event": manager_data.get("current_event"),
@@ -521,6 +524,7 @@ def process_raw_my_picks(manager_data: dict[str, Any]) -> pd.DataFrame:
             "is_captain": pick.get("is_captain", False),
             "is_vice_captain": pick.get("is_vice_captain", False),
             "multiplier": pick.get("multiplier", 1),
+            "chip_used": chip_used,  # Same chip value for all picks in this gameweek
             "as_of_utc": timestamp,
         }
         processed_picks.append(processed_pick)

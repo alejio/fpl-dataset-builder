@@ -478,6 +478,11 @@ class RawMyPicks(Base):
     is_vice_captain: Mapped[bool] = mapped_column(Boolean)
     multiplier: Mapped[int] = mapped_column(Integer)  # captain=2, vice=1, others=1
 
+    # Chip used for this gameweek (same for all picks in a gameweek)
+    chip_used: Mapped[str | None] = mapped_column(
+        String(20), nullable=True, index=True
+    )  # wildcard, freehit, bboost, 3xc
+
     # Metadata - our addition
     as_of_utc: Mapped[datetime] = mapped_column(DateTime, index=True)
 

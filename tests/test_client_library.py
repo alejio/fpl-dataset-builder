@@ -172,6 +172,7 @@ class ClientLibraryTests:
             ("get_my_manager_data", self.client.get_my_manager_data),
             ("get_my_current_picks", self.client.get_my_current_picks),
             ("get_my_picks_history", lambda: self.client.get_my_picks_history()),
+            ("get_my_chip_usage", lambda: self.client.get_my_chip_usage()),
         ]
 
         for func_name, func in manager_functions:
@@ -189,6 +190,19 @@ class ClientLibraryTests:
                     # Should have 15 picks if data exists
                     if len(result) > 0 and len(result) != 15:
                         self.test_results[func_name]["pick_count_issue"] = f"Expected 15 picks, got {len(result)}"
+
+                elif func_name == "get_my_chip_usage":
+                    # Should have gameweek and chip_used columns
+                    if not result.empty:
+                        expected_columns = {"gameweek", "chip_used"}
+                        missing_columns = expected_columns - set(result.columns)
+                        if missing_columns:
+                            self.test_results[func_name]["missing_columns"] = list(missing_columns)
+                        # Check that gameweek values are valid
+                        if "gameweek" in result.columns:
+                            invalid_gws = result[~result["gameweek"].between(1, 38, inclusive="both")]
+                            if len(invalid_gws) > 0:
+                                self.test_results[func_name]["invalid_gameweeks"] = len(invalid_gws)
 
         return {name: result for name, result in self.test_results.items() if name in [f[0] for f in manager_functions]}
 

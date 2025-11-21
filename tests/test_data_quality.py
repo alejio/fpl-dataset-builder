@@ -120,29 +120,30 @@ To fix:
 12. **Data Freshness**: `test_data_freshness` (NEW)
 """
 
-import pytest
 import pandas as pd
+import pytest
+
 from client.fpl_data_client import FPLDataClient
+from validation.derived_schemas import (
+    DerivedBettingFeaturesSchema,
+    DerivedFixtureDifficultySchema,
+    DerivedOwnershipTrendsSchema,
+    DerivedPlayerMetricsSchema,
+    DerivedTeamFormSchema,
+    DerivedValueAnalysisSchema,
+)
 from validation.raw_schemas import (
-    RawPlayersBootstrapSchema,
-    RawTeamsBootstrapSchema,
+    RawBettingOddsSchema,
+    RawChipsSchema,
+    RawElementStatsSchema,
+    RawElementTypesSchema,
     RawEventsBootstrapSchema,
     RawFixturesSchema,
     RawGameSettingsSchema,
-    RawElementStatsSchema,
-    RawElementTypesSchema,
-    RawChipsSchema,
     RawPhasesSchema,
     RawPlayerGameweekSnapshotSchema,
-    RawBettingOddsSchema,
-)
-from validation.derived_schemas import (
-    DerivedPlayerMetricsSchema,
-    DerivedTeamFormSchema,
-    DerivedFixtureDifficultySchema,
-    DerivedValueAnalysisSchema,
-    DerivedOwnershipTrendsSchema,
-    DerivedBettingFeaturesSchema,
+    RawPlayersBootstrapSchema,
+    RawTeamsBootstrapSchema,
 )
 
 
@@ -275,7 +276,7 @@ def test_player_availability_snapshot_null_constraints(client):
         pytest.skip("No events data available")
 
     # Find a finished gameweek with snapshot data
-    finished_gws = events[events["finished"] == True]["event_id"].tolist()
+    finished_gws = events[events["finished"]]["event_id"].tolist()
     if not finished_gws:
         pytest.skip("No finished gameweeks available")
 
@@ -450,7 +451,7 @@ def test_raw_players_range_constraints(client):
 
     if violations:
         pytest.fail(
-            f"Range constraint violations in raw_players_bootstrap:\n" +
+            "Range constraint violations in raw_players_bootstrap:\n" +
             "\n".join(violations)
         )
 
@@ -462,7 +463,7 @@ def test_raw_players_enum_constraints(client):
     if df.empty:
         pytest.skip("No players data available")
 
-    schema_obj = RawPlayersBootstrapSchema.to_schema()
+    RawPlayersBootstrapSchema.to_schema()
     violations = []
 
     # Check status field (should be one of: a, i, s, u, d, n)
@@ -495,7 +496,7 @@ def test_raw_players_enum_constraints(client):
 
     if violations:
         pytest.fail(
-            f"Enum/isin constraint violations in raw_players_bootstrap:\n" +
+            "Enum/isin constraint violations in raw_players_bootstrap:\n" +
             "\n".join(violations)
         )
 
@@ -507,7 +508,7 @@ def test_raw_players_uniqueness_constraints(client):
     if df.empty:
         pytest.skip("No players data available")
 
-    schema_obj = RawPlayersBootstrapSchema.to_schema()
+    RawPlayersBootstrapSchema.to_schema()
     violations = []
 
     # Check player_id uniqueness (primary key)
@@ -521,7 +522,7 @@ def test_raw_players_uniqueness_constraints(client):
 
     if violations:
         pytest.fail(
-            f"Uniqueness constraint violations in raw_players_bootstrap:\n" +
+            "Uniqueness constraint violations in raw_players_bootstrap:\n" +
             "\n".join(violations)
         )
 
@@ -538,7 +539,7 @@ def test_raw_fixtures_business_logic(client):
     # Rule 1: If finished=True, scores should not be null
     if 'finished' in df.columns and 'team_h_score' in df.columns and 'team_a_score' in df.columns:
         finished_without_scores = df[
-            (df['finished'] == True) &
+            (df['finished']) &
             (df['team_h_score'].isnull() | df['team_a_score'].isnull())
         ]
         if len(finished_without_scores) > 0:
@@ -589,7 +590,7 @@ def test_raw_fixtures_business_logic(client):
 
     if violations:
         pytest.fail(
-            f"Business logic violations in raw_fixtures:\n" +
+            "Business logic violations in raw_fixtures:\n" +
             "\n".join(violations)
         )
 
@@ -625,7 +626,7 @@ def test_referential_integrity_fixtures(client):
 
     if violations:
         pytest.fail(
-            f"Referential integrity violations in raw_fixtures:\n" +
+            "Referential integrity violations in raw_fixtures:\n" +
             "\n".join(violations)
         )
 
@@ -663,7 +664,7 @@ def test_referential_integrity_players(client):
 
     if violations:
         pytest.fail(
-            f"Referential integrity violations in raw_players_bootstrap:\n" +
+            "Referential integrity violations in raw_players_bootstrap:\n" +
             "\n".join(violations)
         )
 
@@ -712,7 +713,7 @@ def test_referential_integrity_betting_odds(client):
 
     if violations:
         pytest.fail(
-            f"Referential integrity violations in raw_betting_odds:\n" +
+            "Referential integrity violations in raw_betting_odds:\n" +
             "\n".join(violations)
         )
 
@@ -760,7 +761,7 @@ def test_betting_odds_range_constraints(client):
 
     if violations:
         pytest.fail(
-            f"Range constraint violations in raw_betting_odds:\n" +
+            "Range constraint violations in raw_betting_odds:\n" +
             "\n".join(violations)
         )
 
@@ -814,7 +815,7 @@ def test_raw_teams_constraints(client):
 
     if violations:
         pytest.fail(
-            f"Constraint violations in raw_teams_bootstrap:\n" +
+            "Constraint violations in raw_teams_bootstrap:\n" +
             "\n".join(violations)
         )
 
@@ -857,7 +858,7 @@ def test_raw_events_constraints(client):
     # Check that finished gameweeks have statistics
     if 'finished' in df.columns and 'average_entry_score' in df.columns:
         finished_without_stats = df[
-            (df['finished'] == True) &
+            (df['finished']) &
             (df['average_entry_score'].isnull())
         ]
         if len(finished_without_stats) > 0:
@@ -867,7 +868,7 @@ def test_raw_events_constraints(client):
 
     if violations:
         pytest.fail(
-            f"Constraint violations in raw_events_bootstrap:\n" +
+            "Constraint violations in raw_events_bootstrap:\n" +
             "\n".join(violations)
         )
 
@@ -928,7 +929,7 @@ def test_derived_metrics_range_constraints(client):
 
     if violations:
         pytest.fail(
-            f"Range/enum constraint violations in derived_player_metrics:\n" +
+            "Range/enum constraint violations in derived_player_metrics:\n" +
             "\n".join(violations)
         )
 
@@ -1145,7 +1146,7 @@ def test_cross_table_consistency_player_stats(client):
 
     if violations:
         pytest.fail(
-            f"Cross-table consistency violations (player stats vs gameweek performance):\n" +
+            "Cross-table consistency violations (player stats vs gameweek performance):\n" +
             "\n".join(violations)
         )
 
@@ -1188,7 +1189,7 @@ def test_cross_table_consistency_team_stats(client):
 
     if violations:
         pytest.fail(
-            f"Cross-table consistency violations (team stats):\n" +
+            "Cross-table consistency violations (team stats):\n" +
             "\n".join(violations)
         )
 
@@ -1260,7 +1261,7 @@ def test_derived_table_accuracy_player_metrics(client):
 
     if violations:
         pytest.fail(
-            f"Derived table accuracy violations (player metrics):\n" +
+            "Derived table accuracy violations (player metrics):\n" +
             "\n".join(violations)
         )
 
@@ -1275,7 +1276,7 @@ def test_temporal_consistency_player_snapshots(client):
     if events.empty:
         pytest.skip("No events data available")
 
-    finished_gws = events[events["finished"] == True]["event_id"].tolist()
+    finished_gws = events[events["finished"]]["event_id"].tolist()
 
     if len(finished_gws) < 2:
         pytest.skip("Need at least 2 finished gameweeks for temporal validation")
@@ -1305,7 +1306,6 @@ def test_temporal_consistency_player_snapshots(client):
 
     # Check that as_of_utc timestamps are reasonable (not in future)
     if 'as_of_utc' in snapshot1.columns:
-        from datetime import datetime, timezone
         import pandas as pd
 
         # Ensure both are timezone-aware
@@ -1319,7 +1319,7 @@ def test_temporal_consistency_player_snapshots(client):
 
     if violations:
         pytest.fail(
-            f"Temporal consistency violations (player snapshots):\n" +
+            "Temporal consistency violations (player snapshots):\n" +
             "\n".join(violations)
         )
 
@@ -1540,8 +1540,6 @@ def test_comprehensive_uniqueness_all_tables(client):
     violations_by_table = {}
 
     # Time-series tables (multiple rows per key over time)
-    time_series_tables = {'derived_player_metrics', 'derived_team_form',
-                          'derived_value_analysis', 'derived_ownership_trends'}
 
     tables = [
         ("raw_players_bootstrap", "player_id", "get_raw_players_bootstrap"),
