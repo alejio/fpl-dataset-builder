@@ -155,6 +155,18 @@ uv run main.py backfill derived --dry-run            # Preview what would be bac
 uv run main.py backfill ownership                    # Backfill all missing gameweeks
 uv run main.py backfill ownership --gameweek 5       # Backfill specific gameweek
 
+# Backfill chip usage data (updates existing picks with chip information)
+uv run python scripts/backfill_chip_data.py                    # Backfill all gameweeks with picks data
+uv run python scripts/backfill_chip_data.py --start-gw 1 --end-gw 10  # Backfill specific range
+uv run python scripts/backfill_chip_data.py --manager-id 12345 # Use different manager ID
+uv run python scripts/backfill_chip_data.py --dry-run          # Preview what would be updated
+
+# Capture chip usage history (standalone script, saves to CSV)
+uv run python scripts/capture_chip_usage.py                    # Capture all gameweeks
+uv run python scripts/capture_chip_usage.py --start-gw 1 --end-gw 10  # Capture specific range
+uv run python scripts/capture_chip_usage.py --manager-id 12345 # Use different manager ID
+uv run python scripts/capture_chip_usage.py --dry-run          # Preview without saving
+
 # Test backfilled data
 uv run python -c "from client.fpl_data_client import FPLDataClient; client=FPLDataClient(); snapshot=client.get_player_availability_snapshot(1); print(f'GW1: {len(snapshot)} snapshots, Backfilled: {snapshot[\"is_backfilled\"].sum()}')"
 ```
@@ -223,8 +235,10 @@ This is a synchronous Python application that captures complete FPL API data and
 │   ├── migrations/      # Database schema migration scripts
 │   │   ├── derived_tables.py    # Migrate derived tables
 │   │   └── ownership_trends.py  # Migrate ownership trends
-│   └── maintenance/     # One-time fixes and updates
-│       └── fix_value_column.py  # Example maintenance script
+│   ├── maintenance/     # One-time fixes and updates
+│   │   └── fix_value_column.py  # Example maintenance script
+│   ├── capture_chip_usage.py    # Capture chip usage history from FPL API
+│   └── backfill_chip_data.py    # Backfill historical chip usage data
 ├── migrations/          # Alembic database migration utilities
 │   └── manager.py       # Migration management
 ├── client/              # Database client library for external projects
@@ -349,6 +363,7 @@ value_analysis = client.get_derived_value_analysis()
 # Get personal manager data
 my_manager = client.get_my_manager_data()
 my_picks = client.get_my_current_picks()
+chip_usage = client.get_my_chip_usage()  # Historical chip usage (wildcard, freehit, bboost, 3xc)
 
 # Get betting odds data
 betting_odds = client.get_raw_betting_odds()  # All fixtures
@@ -611,6 +626,7 @@ All methods are accessed through the `FPLDataClient` class:
 **Personal Manager Data:**
 - `get_my_manager_data()` - Personal manager information (single row)
 - `get_my_current_picks()` - Current gameweek team selection
+- `get_my_chip_usage(start_gw, end_gw)` - Historical chip usage across gameweeks (wildcard, freehit, bboost, 3xc)
 
 **Gameweek Historical Data (for historical analysis):**
 - `get_player_gameweek_history(player_id, start_gw, end_gw)` - Historical gameweek performance for players
