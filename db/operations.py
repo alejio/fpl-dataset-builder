@@ -11,11 +11,18 @@ from .database import SessionLocal, get_session
 
 
 def convert_datetime_columns(df: pd.DataFrame, datetime_columns: list[str]) -> pd.DataFrame:
-    """Convert string datetime columns to actual datetime objects."""
+    """Convert string datetime columns to actual datetime objects.
+
+    Handles timezone-aware datetimes by converting to UTC and then removing timezone info
+    for SQLite compatibility (SQLite doesn't have native timezone support).
+    """
     df_copy = df.copy()
     for col in datetime_columns:
         if col in df_copy.columns:
-            df_copy[col] = pd.to_datetime(df_copy[col], errors="coerce")
+            # Convert to datetime, handling both naive and timezone-aware values
+            df_copy[col] = pd.to_datetime(df_copy[col], errors="coerce", utc=True)
+            # Remove timezone info for SQLite compatibility (stores as UTC)
+            df_copy[col] = df_copy[col].dt.tz_localize(None)
             # Convert NaT values to None for SQLAlchemy compatibility
             df_copy[col] = df_copy[col].replace({pd.NaT: None})
     return df_copy
