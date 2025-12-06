@@ -216,7 +216,7 @@ class TestBettingOddsValidation:
             pytest.fail(f"Valid data failed validation: {e}")
 
     def test_schema_rejects_invalid_odds(self):
-        """Test that schema rejects odds values <= 1.0."""
+        """Test that schema rejects odds values < 1.0."""
         invalid_data = pd.DataFrame(
             {
                 "fixture_id": [1],
@@ -224,7 +224,7 @@ class TestBettingOddsValidation:
                 "home_team_id": [1],
                 "away_team_id": [2],
                 "referee": ["A Taylor"],
-                "B365H": [0.5],  # Invalid: odds must be > 1.0
+                "B365H": [0.5],  # Invalid: odds must be >= 1.0
                 "B365D": [3.5],
                 "B365A": [2.8],
                 "as_of_utc": [pd.Timestamp.now(tz="UTC")],

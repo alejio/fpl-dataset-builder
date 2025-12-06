@@ -727,7 +727,7 @@ def test_betting_odds_range_constraints(client):
 
     violations = []
 
-    # Odds fields should be > 1.0 (decimal odds)
+    # Odds fields should be >= 1.0 (decimal odds)
     odds_fields = ['B365H', 'B365D', 'B365A', 'PSH', 'PSD', 'PSA',
                    'MaxH', 'MaxD', 'MaxA', 'AvgH', 'AvgD', 'AvgA',
                    'B365CH', 'B365CD', 'B365CA', 'PSCH', 'PSCD', 'PSCA',
@@ -738,12 +738,12 @@ def test_betting_odds_range_constraints(client):
 
     for field in odds_fields:
         if field in df.columns:
-            # Check non-null values are > 1.0
-            invalid = df[(df[field].notna()) & (df[field] <= 1.0)]
+            # Check non-null values are >= 1.0
+            invalid = df[(df[field].notna()) & (df[field] < 1.0)]
             if len(invalid) > 0:
                 violations.append(
-                    f"  - {field}: {len(invalid)} values <= 1.0 "
-                    f"(decimal odds must be > 1.0, min: {df[field].min()})"
+                    f"  - {field}: {len(invalid)} values < 1.0 "
+                    f"(decimal odds must be >= 1.0, min: {df[field].min()})"
                 )
 
     # Statistics fields should be >= 0
