@@ -262,6 +262,20 @@ class TestGameweekCompleteness:
                 "required": True,
                 "description": "Transfer momentum and ownership trends",
             },
+            {
+                "name": "derived_fixture_runs",
+                "get_method": lambda: client.get_derived_fixture_runs(),
+                "gw_column": "gameweek",
+                "required": True,
+                "description": "Fixture run quality and transfer timing analysis",
+            },
+            {
+                "name": "derived_fixture_difficulty",
+                "get_method": lambda: client.get_derived_fixture_difficulty(),
+                "gw_column": "gameweek",
+                "required": False,  # Forward-looking, historical data less relevant
+                "description": "Enhanced fixture difficulty ratings",
+            },
         ]
 
         summary = {"tables": {}, "overall_complete": True}

@@ -15,6 +15,7 @@ from db.database import SessionLocal
 from validation.derived_schemas import (
     DerivedBettingFeaturesSchema,
     DerivedFixtureDifficultySchema,
+    DerivedFixtureRunsSchema,
     DerivedOwnershipTrendsSchema,
     DerivedPlayerMetricsSchema,
     DerivedTeamFormSchema,
@@ -122,6 +123,7 @@ class DerivedDataProcessor:
 
             # Fixture-focused metrics
             derived_data["derived_fixture_difficulty"] = self._process_fixture_difficulty(raw_data)
+            derived_data["derived_fixture_runs"] = self._process_fixture_runs(raw_data)
 
             # Betting-odds features expanded to player level
             derived_data["derived_betting_features"] = self._process_betting_features(raw_data)
@@ -682,6 +684,7 @@ class DerivedDataProcessor:
         logger.info("Processing team form metrics...")
 
         teams = raw_data["teams"].copy()
+        fixtures = raw_data.get("fixtures", pd.DataFrame())
 
         if teams.empty:
             logger.warning("No raw teams data available for form calculation")
@@ -719,6 +722,48 @@ class DerivedDataProcessor:
         )
         teams["away_form_points"] = 1.4  # Slight away disadvantage
 
+        # Calculate actual goals scored/conceded from finished fixtures (last 5 GWs)
+        current_gw = self._get_current_gameweek(raw_data)
+
+        # Initialize goal columns with 0.0
+        teams["team_goals_scored_home_5gw"] = 0.0
+        teams["team_goals_conceded_home_5gw"] = 0.0
+        teams["team_goals_scored_away_5gw"] = 0.0
+        teams["team_goals_conceded_away_5gw"] = 0.0
+
+        if not fixtures.empty and "finished" in fixtures.columns:
+            # Get finished fixtures from last 5 gameweeks
+            finished_fixtures = fixtures[
+                (fixtures["finished"] == True)  # noqa: E712
+                & (fixtures["event"] >= max(1, current_gw - 5))
+                & (fixtures["event"] < current_gw)
+            ].copy()
+
+            if not finished_fixtures.empty:
+                # Calculate goals for each team
+                for _, team in teams.iterrows():
+                    team_id = team["id"]
+
+                    # Home fixtures for this team
+                    home_fixtures = finished_fixtures[finished_fixtures["team_h"] == team_id]
+                    if not home_fixtures.empty:
+                        teams.loc[teams["id"] == team_id, "team_goals_scored_home_5gw"] = float(
+                            home_fixtures["team_h_score"].sum()
+                        )
+                        teams.loc[teams["id"] == team_id, "team_goals_conceded_home_5gw"] = float(
+                            home_fixtures["team_a_score"].sum()
+                        )
+
+                    # Away fixtures for this team
+                    away_fixtures = finished_fixtures[finished_fixtures["team_a"] == team_id]
+                    if not away_fixtures.empty:
+                        teams.loc[teams["id"] == team_id, "team_goals_scored_away_5gw"] = float(
+                            away_fixtures["team_a_score"].sum()
+                        )
+                        teams.loc[teams["id"] == team_id, "team_goals_conceded_away_5gw"] = float(
+                            away_fixtures["team_h_score"].sum()
+                        )
+
         # Calculate venue advantage
         teams["home_advantage"] = teams["home_form_points"] - teams["away_form_points"]
         teams["venue_consistency"] = 1.0 - abs(teams["home_advantage"]) / 3.0  # Normalize
@@ -732,7 +777,7 @@ class DerivedDataProcessor:
         teams["defense_confidence"] = 0.75  # Placeholder
 
         # Meta information
-        teams["gameweek"] = self._get_current_gameweek(raw_data)
+        teams["gameweek"] = current_gw
         teams["games_analyzed"] = 6  # Typical form period
         teams["last_updated"] = self.calculation_date
 
@@ -748,9 +793,13 @@ class DerivedDataProcessor:
                 "home_attack_strength",
                 "home_defense_strength",
                 "home_form_points",
+                "team_goals_scored_home_5gw",
+                "team_goals_conceded_home_5gw",
                 "away_attack_strength",
                 "away_defense_strength",
                 "away_form_points",
+                "team_goals_scored_away_5gw",
+                "team_goals_conceded_away_5gw",
                 "home_advantage",
                 "venue_consistency",
                 "form_trend",
@@ -987,6 +1036,22 @@ class DerivedDataProcessor:
             players["id"].isin(new_players), 0.0, self._calculate_bandwagon_score(players)
         )
 
+        # New strategic metrics
+        # ownership_vs_price: selected_by% / price (value differential indicator)
+        players["current_price"] = players["now_cost"] / 10.0
+        players["ownership_vs_price"] = np.where(
+            players["current_price"] > 0,
+            pd.to_numeric(players["selected_by_percent"], errors="coerce").fillna(0.0) / players["current_price"],
+            0.0,
+        )
+
+        # template_player: >40% owned
+        players["template_player"] = pd.to_numeric(players["selected_by_percent"], errors="coerce").fillna(0.0) > 40.0
+
+        # high_ownership_falling: >30% owned + negative net transfers
+        ownership_pct = pd.to_numeric(players["selected_by_percent"], errors="coerce").fillna(0.0)
+        players["high_ownership_falling"] = (ownership_pct > 30.0) & (players["net_transfers_gw"] < 0)
+
         # Meta information
         players["gameweek"] = int(current_gw)
         players["last_updated"] = self.calculation_date
@@ -1009,6 +1074,9 @@ class DerivedDataProcessor:
                 "ownership_tier",
                 "ownership_risk_level",
                 "bandwagon_score",
+                "ownership_vs_price",
+                "template_player",
+                "high_ownership_falling",
                 "gameweek",
                 "last_updated",
             ]
@@ -1035,6 +1103,124 @@ class DerivedDataProcessor:
         except Exception as e:
             logger.error(f"Ownership trends schema validation failed: {e}")
             return self._create_empty_ownership_trends()
+
+    def _process_fixture_runs(self, raw_data: dict[str, pd.DataFrame]) -> pd.DataFrame:
+        """Process fixture run quality analysis for transfer planning."""
+        logger.info("Processing fixture run analysis...")
+
+        players = raw_data["players"].copy()
+        fixtures = raw_data["fixtures"].copy()
+        teams = raw_data["teams"].copy()
+
+        if players.empty or fixtures.empty or teams.empty:
+            logger.warning("Insufficient data for fixture run analysis")
+            return self._create_empty_fixture_runs()
+
+        current_gw = self._get_current_gameweek(raw_data)
+
+        # Create team strength lookup (using FPL strength ratings)
+        team_strength = teams.set_index("id")[["strength_overall_home", "strength_overall_away"]].to_dict("index")
+
+        # Get upcoming fixtures (next 5 GWs)
+        upcoming_fixtures = fixtures[(fixtures["event"] >= current_gw) & (fixtures["event"] <= current_gw + 5)].copy()
+
+        records = []
+
+        for _, player in players.iterrows():
+            player_id = player["id"]
+            team_id = player["team"]
+
+            # Get this player's upcoming fixtures
+            player_fixtures = upcoming_fixtures[
+                (upcoming_fixtures["team_h"] == team_id) | (upcoming_fixtures["team_a"] == team_id)
+            ].sort_values("event")
+
+            if player_fixtures.empty:
+                # No upcoming fixtures - use neutral values
+                records.append(
+                    {
+                        "player_id": player_id,
+                        "gameweek": current_gw,
+                        "fixture_run_3gw_difficulty": 2.5,
+                        "fixture_run_5gw_difficulty": 2.5,
+                        "green_fixtures_next_3": 0,
+                        "green_fixtures_next_5": 0,
+                        "fixture_swing_upcoming": 0.0,
+                        "optimal_transfer_in_window": False,
+                        "optimal_transfer_out_window": False,
+                        "calculation_date": self.calculation_date,
+                    }
+                )
+                continue
+
+            # Calculate difficulty for each fixture
+            difficulties = []
+            for _, fixture in player_fixtures.iterrows():
+                is_home = fixture["team_h"] == team_id
+                opponent_id = fixture["team_a"] if is_home else fixture["team_h"]
+
+                # Get opponent strength (higher = stronger = harder)
+                opponent_strength_key = "strength_overall_away" if is_home else "strength_overall_home"
+                opponent_strength = team_strength.get(opponent_id, {}).get(opponent_strength_key, 1200)
+
+                # Convert to 0-5 scale (where 5 = most difficult)
+                # FPL strength is typically 1000-1400, we map this to 0-5
+                difficulty = np.clip((opponent_strength - 1000) / 80.0, 0.0, 5.0)
+                difficulties.append(difficulty)
+
+            # Calculate fixture run metrics
+            difficulties_3gw = difficulties[:3]
+            difficulties_5gw = difficulties[:5]
+
+            fixture_run_3gw_difficulty = np.mean(difficulties_3gw) if difficulties_3gw else 2.5
+            fixture_run_5gw_difficulty = np.mean(difficulties_5gw) if difficulties_5gw else 2.5
+
+            green_fixtures_next_3 = sum(1 for d in difficulties_3gw if d <= 2.0)
+            green_fixtures_next_5 = sum(1 for d in difficulties_5gw if d <= 2.0)
+
+            # Fixture swing: compare next 2 GWs to following 3 GWs
+            if len(difficulties) >= 5:
+                immediate_difficulty = np.mean(difficulties[:2])
+                later_difficulty = np.mean(difficulties[2:5])
+                fixture_swing_upcoming = later_difficulty - immediate_difficulty
+            else:
+                fixture_swing_upcoming = 0.0
+
+            # Transfer timing signals
+            optimal_transfer_in_window = (
+                fixture_run_3gw_difficulty <= 2.0  # Easy fixtures coming
+                and green_fixtures_next_3 >= 2  # At least 2 green fixtures
+            )
+
+            optimal_transfer_out_window = (
+                fixture_run_3gw_difficulty >= 3.5  # Hard fixtures coming
+                or fixture_swing_upcoming > 1.0  # Big difficulty spike ahead
+            )
+
+            records.append(
+                {
+                    "player_id": player_id,
+                    "gameweek": current_gw,
+                    "fixture_run_3gw_difficulty": float(fixture_run_3gw_difficulty),
+                    "fixture_run_5gw_difficulty": float(fixture_run_5gw_difficulty),
+                    "green_fixtures_next_3": int(green_fixtures_next_3),
+                    "green_fixtures_next_5": int(green_fixtures_next_5),
+                    "fixture_swing_upcoming": float(fixture_swing_upcoming),
+                    "optimal_transfer_in_window": bool(optimal_transfer_in_window),
+                    "optimal_transfer_out_window": bool(optimal_transfer_out_window),
+                    "calculation_date": self.calculation_date,
+                }
+            )
+
+        df = pd.DataFrame(records)
+
+        try:
+            validated_df = DerivedFixtureRunsSchema.validate(df)
+            logger.info(f"Processed {len(validated_df)} fixture run analyses successfully")
+            return validated_df
+        except Exception as e:
+            logger.error(f"Fixture runs schema validation failed: {e}")
+            return self._create_empty_fixture_runs()
 
     # Helper methods for calculations
 
@@ -1122,6 +1308,9 @@ class DerivedDataProcessor:
             player_row = player.iloc[0]
 
             # Create records for ALL gameweeks from 1 to current_gw - 1
+            # Calculate price for ownership_vs_price
+            player_price = float(player_row["now_cost"]) / 10.0
+
             for gw in range(1, current_gw):
                 backfill_records.append(
                     {
@@ -1140,6 +1329,9 @@ class DerivedDataProcessor:
                         "ownership_tier": "punt",
                         "ownership_risk_level": "low",
                         "bandwagon_score": 0.0,
+                        "ownership_vs_price": 1.0 / player_price if player_price > 0 else 0.0,
+                        "template_player": False,
+                        "high_ownership_falling": False,
                         "gameweek": gw,
                         "last_updated": self.calculation_date,
                     }
@@ -1344,6 +1536,7 @@ class DerivedDataProcessor:
             "derived_value_analysis": self._create_empty_value_analysis(),
             "derived_ownership_trends": self._create_empty_ownership_trends(),
             "derived_betting_features": self._create_empty_betting_features(),
+            "derived_fixture_runs": self._create_empty_fixture_runs(),
         }
 
     def _create_empty_player_metrics(self) -> pd.DataFrame:
@@ -1395,15 +1588,20 @@ class DerivedDataProcessor:
                 "home_attack_strength",
                 "home_defense_strength",
                 "home_form_points",
+                "team_goals_scored_home_5gw",
+                "team_goals_conceded_home_5gw",
                 "away_attack_strength",
                 "away_defense_strength",
                 "away_form_points",
+                "team_goals_scored_away_5gw",
+                "team_goals_conceded_away_5gw",
                 "home_advantage",
                 "venue_consistency",
                 "form_trend",
                 "momentum",
                 "attack_confidence",
                 "defense_confidence",
+                "gameweek",
                 "games_analyzed",
                 "last_updated",
             ]
@@ -1483,6 +1681,9 @@ class DerivedDataProcessor:
                 "ownership_tier",
                 "ownership_risk_level",
                 "bandwagon_score",
+                "ownership_vs_price",
+                "template_player",
+                "high_ownership_falling",
                 "gameweek",
                 "last_updated",
             ]
@@ -1512,6 +1713,23 @@ class DerivedDataProcessor:
                 "over_under_signal",
                 "referee_encoded",
                 "as_of_utc",
+            ]
+        )
+
+    def _create_empty_fixture_runs(self) -> pd.DataFrame:
+        """Create empty fixture runs DataFrame with correct schema."""
+        return pd.DataFrame(
+            columns=[
+                "player_id",
+                "gameweek",
+                "fixture_run_3gw_difficulty",
+                "fixture_run_5gw_difficulty",
+                "green_fixtures_next_3",
+                "green_fixtures_next_5",
+                "fixture_swing_upcoming",
+                "optimal_transfer_in_window",
+                "optimal_transfer_out_window",
+                "calculation_date",
             ]
         )
 

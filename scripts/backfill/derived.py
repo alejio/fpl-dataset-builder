@@ -142,8 +142,25 @@ def backfill_gameweek(gameweek: int, force: bool = False, dry_run: bool = False)
             print(f"      ❌ Failed to save ownership_trends: {e}")
             results["ownership_trends"] = False
 
+        try:
+            db_ops.save_derived_fixture_runs(derived_data["derived_fixture_runs"])
+            results["fixture_runs"] = True
+            print("      ✅ Saved fixture_runs")
+        except Exception as e:
+            print(f"      ❌ Failed to save fixture_runs: {e}")
+            results["fixture_runs"] = False
+
+        try:
+            db_ops.save_derived_fixture_difficulty(derived_data["derived_fixture_difficulty"])
+            results["fixture_difficulty"] = True
+            print("      ✅ Saved fixture_difficulty")
+        except Exception as e:
+            print(f"      ❌ Failed to save fixture_difficulty: {e}")
+            results["fixture_difficulty"] = False
+
         success_count = sum(results.values())
-        print(f"  ✅ Successfully backfilled {success_count}/4 tables for GW{gameweek}")
+        total_tables = len(results)
+        print(f"  ✅ Successfully backfilled {success_count}/{total_tables} tables for GW{gameweek}")
         return results
 
     except Exception as e:
@@ -151,7 +168,10 @@ def backfill_gameweek(gameweek: int, force: bool = False, dry_run: bool = False)
         import traceback
 
         traceback.print_exc()
-        return dict.fromkeys(["player_metrics", "team_form", "value_analysis", "ownership_trends"], False)
+        return dict.fromkeys(
+            ["player_metrics", "team_form", "value_analysis", "ownership_trends", "fixture_runs", "fixture_difficulty"],
+            False,
+        )
 
 
 def main():
@@ -215,7 +235,14 @@ def main():
     print()
 
     # Backfill each gameweek
-    table_success_counts = {"player_metrics": 0, "team_form": 0, "value_analysis": 0, "ownership_trends": 0}
+    table_success_counts = {
+        "player_metrics": 0,
+        "team_form": 0,
+        "value_analysis": 0,
+        "ownership_trends": 0,
+        "fixture_runs": 0,
+        "fixture_difficulty": 0,
+    }
     gameweeks_processed = 0
 
     for gw in target_gws:
@@ -252,6 +279,8 @@ def main():
             "team_form": client.get_derived_team_form(),
             "value_analysis": client.get_derived_value_analysis(),
             "ownership_trends": client.get_derived_ownership_trends(),
+            "fixture_runs": client.get_derived_fixture_runs(),
+            "fixture_difficulty": client.get_derived_fixture_difficulty(),
         }
 
         for table_name, data in verification.items():

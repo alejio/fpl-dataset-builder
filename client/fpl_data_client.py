@@ -245,6 +245,24 @@ class FPLDataClient:
         except Exception as e:
             raise RuntimeError(f"Failed to fetch derived betting features: {e}") from e
 
+    def get_derived_fixture_runs(self, gameweek: int | None = None) -> pd.DataFrame:
+        """Get fixture run quality analysis for transfer planning.
+
+        Analyzes upcoming fixture schedules to identify players entering/exiting
+        good/bad fixture runs. Essential for transfer timing and Free Hit planning.
+
+        Args:
+            gameweek: Optional gameweek filter
+
+        Returns:
+            DataFrame with fixture run metrics including difficulty ratings,
+            green fixture counts, fixture swings, and transfer timing signals
+        """
+        try:
+            return db_ops.get_derived_fixture_runs(gameweek=gameweek)
+        except Exception as e:
+            raise RuntimeError(f"Failed to fetch derived fixture runs: {e}") from e
+
     # Personal Manager Data Access
     def get_my_manager_data(self) -> pd.DataFrame:
         """Get my manager data (single row).
@@ -941,6 +959,11 @@ def get_derived_ownership_trends() -> pd.DataFrame:
 def get_derived_betting_features(gameweek: int | None = None) -> pd.DataFrame:
     """Get betting-odds-derived features at player level."""
     return _get_client().get_derived_betting_features(gameweek=gameweek)
+
+
+def get_derived_fixture_runs(gameweek: int | None = None) -> pd.DataFrame:
+    """Get fixture run quality analysis for transfer planning."""
+    return _get_client().get_derived_fixture_runs(gameweek=gameweek)
 
 
 def get_database_summary() -> dict[str, int]:

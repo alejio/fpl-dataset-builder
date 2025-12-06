@@ -104,6 +104,12 @@ class DerivedTeamForm(Base):
     away_defense_strength: Mapped[float] = mapped_column(Float, nullable=False)
     away_form_points: Mapped[float] = mapped_column(Float, nullable=False)
 
+    # Home/away goal splits (last 5 GWs)
+    team_goals_scored_home_5gw: Mapped[float] = mapped_column(Float, nullable=False)
+    team_goals_conceded_home_5gw: Mapped[float] = mapped_column(Float, nullable=False)
+    team_goals_scored_away_5gw: Mapped[float] = mapped_column(Float, nullable=False)
+    team_goals_conceded_away_5gw: Mapped[float] = mapped_column(Float, nullable=False)
+
     # Venue advantage
     home_advantage: Mapped[float] = mapped_column(Float, nullable=False)
     venue_consistency: Mapped[float] = mapped_column(Float, nullable=False)
@@ -253,6 +259,11 @@ class DerivedOwnershipTrends(Base):
     ownership_risk_level: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
     bandwagon_score: Mapped[float] = mapped_column(Float, nullable=False)
 
+    # New strategic metrics
+    ownership_vs_price: Mapped[float] = mapped_column(Float, nullable=False)
+    template_player: Mapped[bool] = mapped_column(Boolean, nullable=False, index=True)
+    high_ownership_falling: Mapped[bool] = mapped_column(Boolean, nullable=False, index=True)
+
     # Meta information (gameweek moved to composite primary key above)
     last_updated: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.now)
 
@@ -300,3 +311,38 @@ class DerivedBettingFeatures(Base):
 
     # Meta
     as_of_utc: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.now)
+
+
+class DerivedFixtureRuns(Base):
+    """Fixture run quality analysis for transfer planning.
+
+    Analyzes upcoming fixture schedules to identify players entering/exiting
+    good/bad fixture runs. Essential for transfer timing and Free Hit planning.
+    Historical table: stores fixture run analysis per player per gameweek.
+    """
+
+    __tablename__ = "derived_fixture_runs"
+
+    # Composite primary key for player_id + gameweek
+    player_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    gameweek: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+
+    __table_args__ = (PrimaryKeyConstraint("player_id", "gameweek"),)
+
+    # Fixture run difficulty metrics (0.0-5.0 scale)
+    fixture_run_3gw_difficulty: Mapped[float] = mapped_column(Float, nullable=False, index=True)
+    fixture_run_5gw_difficulty: Mapped[float] = mapped_column(Float, nullable=False, index=True)
+
+    # Green fixture counts (FDR <= 2)
+    green_fixtures_next_3: Mapped[int] = mapped_column(Integer, nullable=False)
+    green_fixtures_next_5: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    # Fixture swing detection
+    fixture_swing_upcoming: Mapped[float] = mapped_column(Float, nullable=False)
+
+    # Transfer timing signals
+    optimal_transfer_in_window: Mapped[bool] = mapped_column(Boolean, nullable=False, index=True)
+    optimal_transfer_out_window: Mapped[bool] = mapped_column(Boolean, nullable=False, index=True)
+
+    # Meta
+    calculation_date: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.now)

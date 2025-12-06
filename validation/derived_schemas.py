@@ -88,11 +88,15 @@ class DerivedTeamFormSchema(pa.DataFrameModel):
     home_attack_strength: Series[float] = pa.Field(ge=0.0, le=5.0)
     home_defense_strength: Series[float] = pa.Field(ge=0.0, le=5.0)
     home_form_points: Series[float] = pa.Field(ge=0.0, le=3.0)
+    team_goals_scored_home_5gw: Series[float] = pa.Field(ge=0.0)  # Total goals scored at home (last 5 GWs)
+    team_goals_conceded_home_5gw: Series[float] = pa.Field(ge=0.0)  # Total goals conceded at home (last 5 GWs)
 
     # Away performance
     away_attack_strength: Series[float] = pa.Field(ge=0.0, le=5.0)
     away_defense_strength: Series[float] = pa.Field(ge=0.0, le=5.0)
     away_form_points: Series[float] = pa.Field(ge=0.0, le=3.0)
+    team_goals_scored_away_5gw: Series[float] = pa.Field(ge=0.0)  # Total goals scored away (last 5 GWs)
+    team_goals_conceded_away_5gw: Series[float] = pa.Field(ge=0.0)  # Total goals conceded away (last 5 GWs)
 
     # Venue advantage
     home_advantage: Series[float]  # Difference in performance home vs away
@@ -244,6 +248,11 @@ class DerivedOwnershipTrendsSchema(pa.DataFrameModel):
     ownership_risk_level: Series[str] = pa.Field(isin=["low", "medium", "high", "very_high"])
     bandwagon_score: Series[float] = pa.Field(ge=0.0, le=10.0)  # How much following the crowd
 
+    # New strategic metrics
+    ownership_vs_price: Series[float] = pa.Field(ge=0.0)  # selected_by% / price (value differential)
+    template_player: Series[bool]  # >40% owned
+    high_ownership_falling: Series[bool]  # >30% owned + negative net transfers
+
     # Meta information
     gameweek: Series[int] = pa.Field(ge=1, le=38)
     last_updated: Series[pd.Timestamp]
@@ -296,4 +305,39 @@ class DerivedBettingFeaturesSchema(pa.DataFrameModel):
     as_of_utc: Series[pd.Timestamp]
 
     class Config:
+        coerce = True
+
+
+class DerivedFixtureRunsSchema(pa.DataFrameModel):
+    """Fixture run quality analysis for transfer planning.
+
+    Analyzes upcoming fixture schedules to identify players entering/exiting
+    good/bad fixture runs. Essential for transfer timing and Free Hit planning.
+    """
+
+    # Player identification
+    player_id: Series[int] = pa.Field(ge=1)
+    gameweek: Series[int] = pa.Field(ge=1, le=38)
+
+    # Fixture run difficulty (0.0-5.0, where 5.0 = most difficult)
+    fixture_run_3gw_difficulty: Series[float] = pa.Field(ge=0.0, le=5.0)
+    fixture_run_5gw_difficulty: Series[float] = pa.Field(ge=0.0, le=5.0)
+
+    # Green fixture counts (FDR <= 2)
+    green_fixtures_next_3: Series[int] = pa.Field(ge=0, le=3)
+    green_fixtures_next_5: Series[int] = pa.Field(ge=0, le=5)
+
+    # Fixture swing detection (difficulty change)
+    fixture_swing_upcoming: Series[float]  # Positive = getting harder, negative = getting easier
+
+    # Transfer timing signals
+    optimal_transfer_in_window: Series[bool]  # Good time to transfer IN
+    optimal_transfer_out_window: Series[bool]  # Good time to transfer OUT
+
+    # Meta information
+    calculation_date: Series[pd.Timestamp]
+
+    class Config:
+        """Pandera configuration for fixture runs."""
+
         coerce = True

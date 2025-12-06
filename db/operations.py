@@ -867,6 +867,7 @@ class DatabaseOperations:
             "derived_player_metrics": self.save_derived_player_metrics,
             "derived_team_form": self.save_derived_team_form,
             "derived_fixture_difficulty": self.save_derived_fixture_difficulty,
+            "derived_fixture_runs": self.save_derived_fixture_runs,
             "derived_value_analysis": self.save_derived_value_analysis,
             "derived_ownership_trends": self.save_derived_ownership_trends,
             "derived_betting_features": self.save_derived_betting_features,
@@ -930,6 +931,48 @@ class DatabaseOperations:
             query_result = query.all()
             return model_to_dataframe(models_derived.DerivedBettingFeatures, query_result)
 
+    def save_derived_fixture_runs(self, df: pd.DataFrame) -> None:
+        """Save derived fixture runs DataFrame to database.
+
+        Per-gameweek update: deletes existing data for the specific gameweek
+        before inserting new data, preserving historical gameweeks.
+        """
+        if df.empty:
+            return
+
+        with next(get_session()) as session:
+            try:
+                # Get the gameweek from the dataframe
+                gameweek = int(df["gameweek"].iloc[0])
+
+                # Delete existing records for this gameweek
+                session.query(models_derived.DerivedFixtureRuns).filter(
+                    models_derived.DerivedFixtureRuns.gameweek == gameweek
+                ).delete()
+
+                # Insert new records
+                records = df.to_dict("records")
+                for record in records:
+                    session.add(models_derived.DerivedFixtureRuns(**record))
+
+                session.commit()
+            except Exception as e:
+                session.rollback()
+                raise RuntimeError(f"Failed to save fixture runs data: {e}") from e
+
+    def get_derived_fixture_runs(self, gameweek: int | None = None) -> pd.DataFrame:
+        """Get derived fixture runs as DataFrame.
+
+        Args:
+            gameweek: Optional gameweek filter
+        """
+        with next(get_session()) as session:
+            query = session.query(models_derived.DerivedFixtureRuns)
+            if gameweek is not None:
+                query = query.filter(models_derived.DerivedFixtureRuns.gameweek == gameweek)
+            query_result = query.all()
+            return model_to_dataframe(models_derived.DerivedFixtureRuns, query_result)
+
     def get_database_summary(self) -> dict[str, int]:
         """Get comprehensive database summary with row counts for all tables."""
         with next(get_session()) as session:
@@ -955,6 +998,7 @@ class DatabaseOperations:
                 ("derived_player_metrics", models_derived.DerivedPlayerMetrics),
                 ("derived_team_form", models_derived.DerivedTeamForm),
                 ("derived_fixture_difficulty", models_derived.DerivedFixtureDifficulty),
+                ("derived_fixture_runs", models_derived.DerivedFixtureRuns),
                 ("derived_value_analysis", models_derived.DerivedValueAnalysis),
                 ("derived_ownership_trends", models_derived.DerivedOwnershipTrends),
                 ("derived_betting_features", models_derived.DerivedBettingFeatures),
