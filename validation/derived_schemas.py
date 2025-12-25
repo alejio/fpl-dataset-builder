@@ -24,7 +24,7 @@ class DerivedPlayerMetricsSchema(pa.DataFrameModel):
     position_name: Series[str] = pa.Field(isin=["GKP", "DEF", "MID", "FWD"])
 
     # Value metrics
-    current_price: Series[float] = pa.Field(ge=3.5, le=15.0)  # Actual price (not API x10)
+    current_price: Series[float] = pa.Field(ge=3.5, le=20.0)  # Actual price (not API x10) - £3.5m to £20.0m
     points_per_million: Series[float] = pa.Field(ge=0.0)  # Total points / current price
     form_per_million: Series[float] = pa.Field(ge=0.0)  # Form rating / current price
     value_score: Series[float] = pa.Field(ge=0.0, le=100.0)  # Composite value metric (0-100)
@@ -175,7 +175,7 @@ class DerivedValueAnalysisSchema(pa.DataFrameModel):
     position_id: Series[int] = pa.Field(ge=1, le=4)
 
     # Current state
-    current_price: Series[float] = pa.Field(ge=3.5, le=15.0)
+    current_price: Series[float] = pa.Field(ge=3.5, le=20.0)  # Actual price (not API x10) - £3.5m to £20.0m
     total_points: Series[int] = pa.Field(ge=0)
 
     # Value metrics

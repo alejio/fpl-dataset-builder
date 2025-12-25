@@ -39,7 +39,9 @@ class RawPlayersBootstrapSchema(pa.DataFrameModel):
     news_added: Series[pd.Timestamp] = pa.Field(nullable=True)
 
     # Pricing and value
-    now_cost: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=35, le=150)  # API stores as 10x actual price
+    now_cost: Series[pd.Int64Dtype] = pa.Field(
+        nullable=True, ge=35, le=200
+    )  # API stores as 10x actual price (£3.5m-£20.0m)
     cost_change_event: Series[pd.Int64Dtype] = pa.Field(nullable=True)
     cost_change_event_fall: Series[pd.Int64Dtype] = pa.Field(nullable=True)  # Can be negative when prices fall
     cost_change_start: Series[pd.Int64Dtype] = pa.Field(nullable=True)
@@ -475,7 +477,9 @@ class RawPlayerGameweekSnapshotSchema(pa.DataFrameModel):
     news_added: Series[pd.Timestamp] = pa.Field(nullable=True)
 
     # Price at snapshot time (for validation/reference)
-    now_cost: Series[pd.Int64Dtype] = pa.Field(nullable=True, ge=35, le=150)  # API stores as 10x actual price
+    now_cost: Series[pd.Int64Dtype] = pa.Field(
+        nullable=True, ge=35, le=200
+    )  # API stores as 10x actual price (£3.5m-£20.0m)
 
     # Expected points at snapshot time (optional, useful for analysis)
     ep_this: Series[str] = pa.Field(str_length={"min_value": 0}, nullable=True)

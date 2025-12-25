@@ -161,7 +161,7 @@ def main(
                 finished_col = gw_fixtures.get(
                     "finished", pd.Series([False] * len(gw_fixtures), index=gw_fixtures.index)
                 )
-                upcoming_fixtures = gw_fixtures[not finished_col.fillna(False)]
+                upcoming_fixtures = gw_fixtures[~finished_col.fillna(False)]
 
                 if not upcoming_fixtures.empty:
                     # Fetch real-time odds for upcoming gameweek
