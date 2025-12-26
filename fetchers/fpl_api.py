@@ -101,6 +101,7 @@ def fetch_manager_team_with_budget(manager_id: int) -> dict | None:
             "total_transfers": picks_info.get("entry_history", {}).get("total_transfers", 0),
             "transfer_cost": picks_info.get("entry_history", {}).get("event_transfers_cost", 0),
             "points_on_bench": picks_info.get("entry_history", {}).get("points_on_bench", 0),
+            "free_transfers_available": picks_info.get("transfers", {}).get("limit", 1),  # Actual FT count from API
             "active_chip": picks_info.get("active_chip"),
             "picks": picks_info.get("picks", []),
         }

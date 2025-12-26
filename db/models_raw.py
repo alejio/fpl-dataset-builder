@@ -455,6 +455,9 @@ class RawMyManager(Base):
     total_transfers: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Total transfers made
     transfer_cost: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Transfer cost for current GW
     points_on_bench: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Points on bench
+    free_transfers_available: Mapped[int | None] = mapped_column(
+        Integer, nullable=True
+    )  # Available free transfers from API
 
     # Metadata - our addition
     as_of_utc: Mapped[datetime] = mapped_column(DateTime, index=True)
