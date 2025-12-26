@@ -292,6 +292,46 @@ class DatabaseOperations:
             query_result = session.query(models_raw.RawMyPicks).all()
             return model_to_dataframe(models_raw.RawMyPicks, query_result)
 
+    def save_raw_my_gameweek_summary(self, df: pd.DataFrame) -> None:
+        """Save raw my gameweek summary DataFrame to database (upsert by gameweek)."""
+        with next(get_session()) as session:
+            # Check if data already exists for this manager + gameweek
+            if not df.empty and "event" in df.columns and "manager_id" in df.columns:
+                gameweek = int(df["event"].iloc[0])
+                manager_id = int(df["manager_id"].iloc[0])
+                existing = (
+                    session.query(models_raw.RawMyGameweekSummary)
+                    .filter(
+                        models_raw.RawMyGameweekSummary.event == gameweek,
+                        models_raw.RawMyGameweekSummary.manager_id == manager_id,
+                    )
+                    .first()
+                )
+
+                # Delete existing record for this gameweek if it exists
+                if existing:
+                    deleted_count = (
+                        session.query(models_raw.RawMyGameweekSummary)
+                        .filter(
+                            models_raw.RawMyGameweekSummary.event == gameweek,
+                            models_raw.RawMyGameweekSummary.manager_id == manager_id,
+                        )
+                        .delete()
+                    )
+                    session.flush()
+                    print(f"  🗑️ Deleted {deleted_count} existing gameweek summary for GW{gameweek}")
+
+            df_converted = convert_datetime_columns(df, ["as_of_utc"])
+            records = df_converted.to_dict("records")
+            session.bulk_insert_mappings(models_raw.RawMyGameweekSummary, records)
+            session.commit()
+
+    def get_raw_my_gameweek_summary(self) -> pd.DataFrame:
+        """Get raw my gameweek summary data as DataFrame."""
+        with next(get_session()) as session:
+            query_result = session.query(models_raw.RawMyGameweekSummary).all()
+            return model_to_dataframe(models_raw.RawMyGameweekSummary, query_result)
+
     def save_raw_betting_odds(self, df: pd.DataFrame) -> None:
         """Save raw betting odds DataFrame to database (REPLACE strategy)."""
         session = self.session_factory()

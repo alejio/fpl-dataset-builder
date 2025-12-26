@@ -384,6 +384,95 @@ class FPLDataClient:
         except Exception as e:
             raise RuntimeError(f"Failed to fetch chip usage history: {e}") from e
 
+    def get_my_gameweek_summary(self, start_gw: int = None, end_gw: int = None) -> pd.DataFrame:
+        """Get historical gameweek summary data including transfers made, bank, value, etc.
+
+        Args:
+            start_gw: Starting gameweek (optional)
+            end_gw: Ending gameweek (optional)
+
+        Returns:
+            DataFrame with gameweek summary data including event_transfers, event_transfers_cost,
+            points, rank, bank, value, points_on_bench
+
+        Example:
+            >>> client = FPLDataClient()
+            >>> summary = client.get_my_gameweek_summary(start_gw=10, end_gw=15)
+            >>> # Check transfers made in each gameweek
+            >>> summary[["event", "event_transfers", "event_transfers_cost"]]
+        """
+        try:
+            df = db_ops.get_raw_my_gameweek_summary()
+
+            if df.empty:
+                return df
+
+            # Filter by gameweek range if specified
+            if start_gw is not None:
+                df = df[df["event"] >= start_gw]
+            if end_gw is not None:
+                df = df[df["event"] <= end_gw]
+
+            return df.sort_values("event")
+        except Exception as e:
+            raise RuntimeError(f"Failed to fetch gameweek summary: {e}") from e
+
+    def calculate_available_free_transfers(self, gameweek: int) -> int:
+        """Calculate available free transfers for a gameweek based on previous activity.
+
+        Uses FPL free transfer logic:
+        - GW1: 1 FT
+        - Each GW: +1 FT (max 2 bankable)
+        - If 0 transfers made last week → 2 FTs (banked)
+        - If 1+ transfers made last week → 1 FT
+        - Wildcards/Free Hits reset banking
+
+        Args:
+            gameweek: Gameweek to calculate free transfers for
+
+        Returns:
+            Number of available free transfers (1 or 2)
+
+        Example:
+            >>> client = FPLDataClient()
+            >>> # Check available FTs for GW18
+            >>> fts = client.calculate_available_free_transfers(18)
+            >>> print(f"You have {fts} free transfer(s) for GW18")
+        """
+        if gameweek <= 1:
+            return 1
+
+        try:
+            # Get previous gameweek summary
+            prev_gw_summary = self.get_my_gameweek_summary(start_gw=gameweek - 1, end_gw=gameweek - 1)
+
+            if prev_gw_summary.empty:
+                # No data for previous gameweek, assume 1 FT
+                return 1
+
+            prev_gw_data = prev_gw_summary.iloc[0]
+
+            # Check if wildcard or free hit was used (chips reset banking)
+            chip_usage = self.get_my_chip_usage(start_gw=gameweek - 1, end_gw=gameweek - 1)
+            if not chip_usage.empty:
+                chip = chip_usage.iloc[0]["chip_used"]
+                if chip and chip.lower() in ["wildcard", "freehit", "free hit"]:
+                    return 1  # Chips reset to 1 FT
+
+            # Check transfers made last week
+            event_transfers = prev_gw_data.get("event_transfers", 0)
+
+            if event_transfers == 0:
+                # No transfers made last week -> banked FT
+                return 2
+            else:
+                # Transfers made last week -> normal 1 FT
+                return 1
+
+        except Exception as e:
+            print(f"Warning: Could not calculate free transfers for GW{gameweek}: {e}")
+            return 1  # Fallback to 1 FT on error
+
     def get_gameweek_performance(self, gameweek: int) -> pd.DataFrame:
         """Get all player performances for a specific gameweek.
 
@@ -998,6 +1087,39 @@ def get_my_chip_usage(start_gw: int = None, end_gw: int = None) -> pd.DataFrame:
         Each row represents one gameweek and the chip used (if any)
     """
     return _get_client().get_my_chip_usage(start_gw=start_gw, end_gw=end_gw)
+
+
+def get_my_gameweek_summary(start_gw: int = None, end_gw: int = None) -> pd.DataFrame:
+    """Get historical gameweek summary data including transfers made, bank, value, etc.
+
+    Args:
+        start_gw: Starting gameweek (optional)
+        end_gw: Ending gameweek (optional)
+
+    Returns:
+        DataFrame with gameweek summary data including event_transfers, event_transfers_cost,
+        points, rank, bank, value, points_on_bench
+    """
+    return _get_client().get_my_gameweek_summary(start_gw=start_gw, end_gw=end_gw)
+
+
+def calculate_available_free_transfers(gameweek: int) -> int:
+    """Calculate available free transfers for a gameweek based on previous activity.
+
+    Uses FPL free transfer logic:
+    - GW1: 1 FT
+    - Each GW: +1 FT (max 2 bankable)
+    - If 0 transfers made last week → 2 FTs (banked)
+    - If 1+ transfers made last week → 1 FT
+    - Wildcards/Free Hits reset banking
+
+    Args:
+        gameweek: Gameweek to calculate free transfers for
+
+    Returns:
+        Number of available free transfers (1 or 2)
+    """
+    return _get_client().calculate_available_free_transfers(gameweek)
 
 
 def get_players_enhanced() -> pd.DataFrame:

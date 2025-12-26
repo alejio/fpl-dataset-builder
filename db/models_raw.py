@@ -490,6 +490,46 @@ class RawMyPicks(Base):
     __table_args__ = (UniqueConstraint("event", "player_id", "position", name="uq_event_player_position"),)
 
 
+class RawMyGameweekSummary(Base):
+    """Per-gameweek manager summary from FPL API /entry/{id}/event/{gw}/picks/.
+
+    Stores gameweek-specific data like transfers made, bank balance, etc.
+    One row per gameweek.
+    """
+
+    __tablename__ = "raw_my_gameweek_summary"
+
+    # Primary key
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+
+    # Gameweek identification
+    event: Mapped[int] = mapped_column(Integer, index=True)
+    manager_id: Mapped[int] = mapped_column(Integer, index=True)
+
+    # Performance
+    points: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    total_points: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    rank: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    overall_rank: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # Financial
+    bank: Mapped[int | None] = mapped_column(Integer, nullable=True)  # In 0.1M units
+    value: Mapped[int | None] = mapped_column(Integer, nullable=True)  # In 0.1M units
+
+    # Transfers - THIS IS WHAT WE NEED!
+    event_transfers: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    event_transfers_cost: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # Other gameweek stats
+    points_on_bench: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # Metadata
+    as_of_utc: Mapped[datetime] = mapped_column(DateTime, index=True)
+
+    # Ensure uniqueness per gameweek per manager
+    __table_args__ = (UniqueConstraint("manager_id", "event", name="uq_manager_event"),)
+
+
 class RawPlayerGameweekPerformance(Base):
     """Individual player performance data per gameweek from FPL API."""
 

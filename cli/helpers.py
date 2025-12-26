@@ -16,6 +16,7 @@ from fetchers.raw_processor import (
     process_all_raw_bootstrap_data,
     process_raw_fixtures,
     process_raw_gameweek_performance,
+    process_raw_my_gameweek_summary,
     process_raw_my_manager,
     process_raw_my_picks,
 )
@@ -155,12 +156,25 @@ def fetch_and_save_gameweek_data(
     # Fetch updated manager picks for current gameweek
     updated_picks = fetch_manager_gameweek_picks(manager_id, gameweek)
     if updated_picks:
+        # Process and save picks
         picks_df = process_raw_my_picks({**updated_picks, "current_event": gameweek})
 
         if not picks_df.empty:
             db_ops = DatabaseOperations()
             db_ops.save_raw_my_picks(picks_df)
             typer.echo(f"✅ Updated picks for gameweek {gameweek}")
+
+        # Process and save gameweek summary (includes transfer data!)
+        gameweek_summary_df = process_raw_my_gameweek_summary({**updated_picks, "manager_id": manager_id})
+
+        if not gameweek_summary_df.empty:
+            db_ops.save_raw_my_gameweek_summary(gameweek_summary_df)
+            transfers = (
+                gameweek_summary_df.iloc[0]["event_transfers"]
+                if "event_transfers" in gameweek_summary_df.columns
+                else 0
+            )
+            typer.echo(f"✅ Saved gameweek {gameweek} summary (transfers made: {transfers})")
 
     return True
 

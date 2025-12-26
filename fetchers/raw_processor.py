@@ -540,6 +540,53 @@ def process_raw_my_picks(manager_data: dict[str, Any]) -> pd.DataFrame:
         return df
 
 
+def process_raw_my_gameweek_summary(manager_data: dict[str, Any]) -> pd.DataFrame:
+    """Convert raw gameweek summary data (entry_history) to DataFrame.
+
+    Extracts per-gameweek manager stats including transfers made, bank balance, etc.
+    """
+    print("Processing raw gameweek summary data...")
+
+    if not manager_data:
+        print("Warning: No manager data provided")
+        return pd.DataFrame()
+
+    # Get entry_history from the picks API response
+    entry_history = manager_data.get("entry_history", {})
+    if not entry_history:
+        print("Warning: No entry_history found in manager data")
+        return pd.DataFrame()
+
+    timestamp = pd.Timestamp.now(tz="UTC")
+    manager_id = manager_data.get("manager_id", 0)
+
+    summary = {
+        "event": entry_history.get("event"),
+        "manager_id": manager_id,
+        "points": entry_history.get("points"),
+        "total_points": entry_history.get("total_points"),
+        "rank": entry_history.get("rank"),
+        "overall_rank": entry_history.get("overall_rank"),
+        "bank": entry_history.get("bank"),
+        "value": entry_history.get("value"),
+        "event_transfers": entry_history.get("event_transfers"),
+        "event_transfers_cost": entry_history.get("event_transfers_cost"),
+        "points_on_bench": entry_history.get("points_on_bench"),
+        "as_of_utc": timestamp,
+    }
+
+    df = pd.DataFrame([summary])
+
+    try:
+        print(
+            f"✅ Processed gameweek {entry_history.get('event')} summary (transfers: {entry_history.get('event_transfers')})"
+        )
+        return df
+    except Exception as e:
+        print(f"❌ Gameweek summary validation failed: {str(e)[:200]}")
+        return df
+
+
 def process_raw_gameweek_performance(
     live_data: dict[str, Any], gameweek: int, bootstrap_data: dict[str, Any] = None, fixtures_data: list[dict] = None
 ) -> pd.DataFrame:

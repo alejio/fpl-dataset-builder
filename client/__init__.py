@@ -12,6 +12,8 @@ Example usage:
 
 from .fpl_data_client import (
     FPLDataClient,
+    # Manager-specific data
+    calculate_available_free_transfers,
     # Legacy compatibility functions
     get_current_players,
     get_current_teams,
@@ -27,6 +29,7 @@ from .fpl_data_client import (
     get_gameweek_live_data,
     get_my_chip_usage,
     get_my_current_picks,
+    get_my_gameweek_summary,
     get_my_manager_data,
     get_player_xg_xa_rates,
     get_raw_chips,
@@ -45,8 +48,11 @@ __all__ = [
     "FPLDataClient",
     "get_database_summary",
     "get_data_freshness",
+    # Manager-specific data
+    "calculate_available_free_transfers",
     "get_my_chip_usage",
     "get_my_current_picks",
+    "get_my_gameweek_summary",
     "get_my_manager_data",
     # Legacy compatibility functions
     "get_current_players",
